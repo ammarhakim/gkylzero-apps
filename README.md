@@ -6,7 +6,9 @@ specific problems using the GkeylZero library. GkeyllZero itself
 provides three major Apps itself. These apps are for other equations,
 perhaps simpler than the GkeyllZero apps themselves.
 
-| Directory | Description |
-------------------------------------------------------------------
-| dgc_maxwell | Discrete Geometric Calculus Maxwell solver |
+| Directory     | Description                             |
+|---------------|:----------------------------------------|
+| dgc_maxwell | Discrete Geometric Calculus Maxwell solver|
+
+
 
