@@ -1,4 +1,5 @@
 #include <dgc_maxwell.h>
+#include <rt_arg_parse.h>
 
 struct sim_ctx {
   double LX, LY;
@@ -29,8 +30,18 @@ mag_fld(double t, const double* GKYL_RESTRICT xn, double* GKYL_RESTRICT fout, vo
 }
 
 int
-main(void)
+main(int argc, char **argv)
 {
+  struct gkyl_app_args app_args = parse_app_args(argc, argv);
+
+  if (app_args.trace_mem) {
+    gkyl_cu_dev_mem_debug_set(true);
+    gkyl_mem_debug_set(true);
+  }
+
+  int NX = APP_ARGS_CHOOSE(app_args.xcells[0], 80);
+  int NY = APP_ARGS_CHOOSE(app_args.xcells[1], 40);
+  
   struct sim_ctx sc = {
     .LX = 8.0,
     .LY = 4.0,
@@ -44,7 +55,7 @@ main(void)
     .ndim = 2,
     .lower = { 0.0, 0.0 },
     .upper = { sc.LX, sc.LY },
-    .cells = { 80, 40 },
+    .cells = { NX, NY },
 
     .ctx = &sc,
     .init_E = elc_fld,
@@ -66,8 +77,8 @@ main(void)
 
   dt = fmin(dt, tend-tcurr);
 
-  long step = 1;
-  while (tcurr < tend) {
+  long step = 1, num_steps = app_args.num_steps;  
+  while ((tcurr < tend) && (step <= num_steps)) {
     printf("Taking time-step %ld at t = %g ...", step, tcurr);
     struct gkyl_update_status status = dgc_app_update(app, dt);
     printf(" dt = %g\n", status.dt_actual);
