@@ -25,8 +25,14 @@ dgc_app *dgc_app_new(const struct dgc_inp *inp);
 // Initialize the simulation with initial conditions
 void dgc_app_apply_ics(dgc_app *app);
 
+// Reinitialize the simulation using supplied functions
+void dgc_app_reinit(dgc_app *app, double tm, evalf_t efunc, evalf_t bfunc, void *ctx);
+
 // Write to file
 void dgc_app_write(const dgc_app *app, double tm, int frame);
+
+// Maximum stable time-step
+double dgc_app_max_dt(const dgc_app *app);
 
 // Take a time-step
 struct gkyl_update_status dgc_app_update(dgc_app *app, double dt);

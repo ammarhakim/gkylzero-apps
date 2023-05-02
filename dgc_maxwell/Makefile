@@ -63,11 +63,14 @@ INCLUDES = -I${G0_INC_DIR} -I${LAPACK_INC} -I${SUPERLU_INC} -I${MPI_INC_DIR}
 LIB_DIRS = -L${LAPACK_LIB_DIR} -L${SUPERLU_LIB_DIR} -L${MPI_LIB_DIR}
 EXT_LIBS = ${LAPACK_LIB} ${SUPERLU_LIB} ${MPI_LIBS}
 
-all: dgc_maxwell.o
+all: dgc_maxwell.o sim_tm_2d
 
 dgc_maxwell.o: dgc_maxwell.c dgc_maxwell.h
 	 ${CC} ${CFLAGS} ${INCLUDES} -c dgc_maxwell.c -o dgc_maxwell.o
 
+sim_tm_2d: dgc_maxwell.o sim_tm_2d.c
+	${CC} ${CFLAGS} ${INCLUDES} sim_tm_2d.c dgc_maxwell.o -o sim_tm_2d -L${G0_LIB_DIR} ${G0_RPATH} ${G0_LIBS} ${LIB_DIRS} ${EXT_LIBS}
+
 clean:
-	rm -rf dgc_maxwell.o
+	rm -rf dgc_maxwell.o sim_tm_2d
 

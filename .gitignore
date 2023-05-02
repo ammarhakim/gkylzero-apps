@@ -1,3 +1,8 @@
+.cache
+*~
+*.gkyl
+*compile_commands.json
+
 # Prerequisites
 *.d
 
@@ -50,3 +55,4 @@ modules.order
 Module.symvers
 Mkfile.old
 dkms.conf
+
