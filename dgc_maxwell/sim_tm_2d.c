@@ -65,6 +65,7 @@ main(int argc, char **argv)
   struct dgc_app *app = dgc_app_new(&inp);
 
   dgc_app_apply_ics(app);
+  dgc_app_calc_em_energy(app, 0.0);
   dgc_app_write(app, 0.0, 0);
 
   // compute oscillation frequency
@@ -89,11 +90,14 @@ main(int argc, char **argv)
     }
     tcurr += status.dt_actual;
 
+    dgc_app_calc_em_energy(app, tcurr);    
+
     dt = fmin(tend-tcurr, status.dt_suggested);
 
     step += 1;
   }
   dgc_app_write(app, tend, 1);
+  dgc_app_write_em_energy(app);
 
   // force app to initialize with exact solution and write it out for
   // comparison

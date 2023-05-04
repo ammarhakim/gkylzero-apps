@@ -107,7 +107,7 @@ static int offset_idx[][3] = {
 
 // compute cell offsets
 void
-calc_offsets(const struct gkyl_range *range, long offsets[])
+calc_offsets(const struct gkyl_range *range, long offsets[OFF_END])
 {
   for (int i=0; i<OFF_END; ++i)
     offsets[i] = gkyl_range_offset(range, offset_idx[i]);
@@ -128,6 +128,9 @@ struct dgc_app {
   struct mv_array *Fhalf_new, *Fhalf;
   struct mv_array *Ffull_new, *Ffull;
   struct mv_array *gradf;
+
+  bool is_first_energy_write_call;
+  gkyl_dynvec em_energy;
 
   struct app_skin_ghost_ranges skin_ghost; // conf-space skin/ghost
   struct mv_array *bc_buffer; // buffer for periodic BCs
@@ -157,11 +160,12 @@ dgc_app_new(const struct dgc_inp *inp)
 
   app->Ffull = mv_array_new(app->local_ext.volume);
   app->Ffull_new = mv_array_new(app->local_ext.volume);
-
   app->Fhalf = mv_array_new(app->local_ext.volume);
   app->Fhalf_new = mv_array_new(app->local_ext.volume);
-
   app->gradf = mv_array_new(app->local_ext.volume);
+
+  app->is_first_energy_write_call = true;
+  app->em_energy = gkyl_dynvec_new(GKYL_DOUBLE, 6);
 
   app->init_E = inp->init_E;
   app->init_B = inp->init_B;
@@ -255,7 +259,7 @@ dgc_app_reinit(dgc_app *app, double tm, evalf_t efunc, evalf_t bfunc, void *ctx)
 }
 
 void
-dgc_app_write(const struct dgc_app *app, double tm, int frame)
+dgc_app_write(struct dgc_app *app, double tm, int frame)
 {
   char fileNm[1024]; // buffer for file name
   
@@ -286,6 +290,22 @@ dgc_app_write(const struct dgc_app *app, double tm, int frame)
 
     gkyl_grid_sub_array_write(&app->grid, &app->local, app->Ffull->ps, fileNm);
   } while (0);
+}
+
+void
+dgc_app_write_em_energy(dgc_app *app)
+{
+  char fileNm[1024]; // buffer for file name  
+  const char *fmt = "%s_em_energy.gkyl";
+  snprintf(fileNm, sizeof fileNm, fmt, app->name);
+    
+  if (app->is_first_energy_write_call) {
+    gkyl_dynvec_write(app->em_energy, fileNm);
+    app->is_first_energy_write_call = false;
+  }
+  else {
+    gkyl_dynvec_awrite(app->em_energy, fileNm);
+  }
 }
 
 double
@@ -483,17 +503,46 @@ dgc_app_update(dgc_app *app, double dt)
 }
 
 void
+dgc_app_calc_em_energy(const dgc_app *app, double tm)
+{
+#define SQ(x) ((x)*(x))
+  
+  struct gkyl_range_iter iter;
+  gkyl_range_iter_init(&iter, &app->local);
+
+  double em_energy[6] = { 0.0 };
+  
+  while ( gkyl_range_iter_next(&iter) ) {
+    long lidx = gkyl_range_idx(&app->local, iter.idx);
+
+    const double *a_I = gkyl_array_cfetch(app->Ffull->m1, lidx);    
+    const double *b_I = gkyl_array_cfetch(app->Ffull->m2, lidx);
+
+    em_energy[0] += SQ(a_I[0]);
+    em_energy[1] += SQ(a_I[1]);
+    em_energy[2] += SQ(a_I[2]);
+
+    em_energy[3] += SQ(b_I[0]);
+    em_energy[4] += SQ(b_I[1]);
+    em_energy[5] += SQ(b_I[2]);
+  }
+
+  gkyl_dynvec_append(app->em_energy, tm, em_energy);
+  
+#undef SQ
+}
+
+void
 dgc_app_release(struct dgc_app *app)
 {
   mv_array_release(app->Fhalf);
   mv_array_release(app->Fhalf_new);
-
   mv_array_release(app->Ffull);
   mv_array_release(app->Ffull_new);
-
   mv_array_release(app->gradf);
-
   mv_array_release(app->bc_buffer);
+
+  gkyl_dynvec_release(app->em_energy);
   
   gkyl_free(app);
 }
