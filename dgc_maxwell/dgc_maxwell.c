@@ -479,7 +479,7 @@ leap_frog(dgc_app *app, double dt)
   
   // update half-step solution
   calc_grad_f(app, app->Ffull_new, app->gradf);
-  mv_array_combine(app->Fhalf_new, 1.0, app->Ffull_new, -dt, app->gradf, app->local);
+  mv_array_combine(app->Fhalf_new, 1.0, app->Fhalf, -dt, app->gradf, app->local);
   apply_bc(app, app->Fhalf_new);
 
   // copy solution over
@@ -506,6 +506,8 @@ void
 dgc_app_calc_em_energy(const dgc_app *app, double tm)
 {
 #define SQ(x) ((x)*(x))
+
+  double vol = app->grid.cellVolume;
   
   struct gkyl_range_iter iter;
   gkyl_range_iter_init(&iter, &app->local);
@@ -525,8 +527,10 @@ dgc_app_calc_em_energy(const dgc_app *app, double tm)
     em_energy[3] += SQ(b_I[0]);
     em_energy[4] += SQ(b_I[1]);
     em_energy[5] += SQ(b_I[2]);
+
   }
 
+  for (int c=0; c<6; ++c) em_energy[c] *= vol;
   gkyl_dynvec_append(app->em_energy, tm, em_energy);
   
 #undef SQ
