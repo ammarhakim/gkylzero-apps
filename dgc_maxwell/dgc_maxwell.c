@@ -1,5 +1,7 @@
 #include <dgc_maxwell.h>
 
+double my_sq(double x) { return x*x; }
+
 // ranges for use in BCs
 struct app_skin_ghost_ranges {
   struct gkyl_range lower_skin[GKYL_MAX_DIM];
