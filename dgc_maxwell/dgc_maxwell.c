@@ -1,7 +1,5 @@
 #include <dgc_maxwell.h>
 
-double my_sq(double x) { return x*x; }
-
 // ranges for use in BCs
 struct app_skin_ghost_ranges {
   struct gkyl_range lower_skin[GKYL_MAX_DIM];
@@ -468,7 +466,7 @@ leap_frog(dgc_app *app, double dt)
   if (app->is_first) {
     // need to compute Fhalf using ICs before taking step
     calc_grad_f(app, app->Ffull, app->gradf);
-    mv_array_combine(app->Fhalf, 1.0, app->Ffull, -dt/2, app->gradf, app->local);
+    mv_array_combine(app->Fhalf, 1.0, app->Ffull, -dta/2, app->gradf, app->local);
     apply_bc(app, app->Fhalf);
     
     app->is_first = false;
@@ -476,12 +474,12 @@ leap_frog(dgc_app *app, double dt)
 
   // update full-step solution
   calc_grad_f(app, app->Fhalf, app->gradf);
-  mv_array_combine(app->Ffull_new, 1.0, app->Ffull, -dt, app->gradf, app->local);
+  mv_array_combine(app->Ffull_new, 1.0, app->Ffull, -dta, app->gradf, app->local);
   apply_bc(app, app->Ffull_new);
   
   // update half-step solution
   calc_grad_f(app, app->Ffull_new, app->gradf);
-  mv_array_combine(app->Fhalf_new, 1.0, app->Fhalf, -dt, app->gradf, app->local);
+  mv_array_combine(app->Fhalf_new, 1.0, app->Fhalf, -dta, app->gradf, app->local);
   apply_bc(app, app->Fhalf_new);
 
   // copy solution over
