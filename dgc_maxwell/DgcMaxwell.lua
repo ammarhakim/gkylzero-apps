@@ -191,7 +191,7 @@ local app_mt = {
       end,
       calcFieldEnergy = function(self, tcurr)
 	 return ffi.C.dgc_app_calc_em_energy(self.app, tcurr)
-      end,      
+      end,
       run = function(self)
 	 local frame_trig = _M.TimeTrigger(self.tEnd/self.nFrame)
 

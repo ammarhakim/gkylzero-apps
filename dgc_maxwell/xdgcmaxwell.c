@@ -6,27 +6,8 @@
 #include <lauxlib.h>
 
 #include <stdio.h>
-#include <unistd.h>
-#include <sys/stat.h>
 #include <stdint.h>
 #include <stdbool.h>
-
-bool sl_check_file_exists(const char *fname);
-int64_t sl_file_size(const char *fname);
-
-bool
-sl_check_file_exists(const char *fname)
-{
-  return access(fname, F_OK) == 0;
-}
-
-int64_t
-sl_file_size(const char *fname)
-{
-  struct stat st;
-  stat(fname, &st);
-  return st.st_size;
-}
 
 static int
 run_lua(lua_State *L, const char *str)
@@ -43,7 +24,7 @@ run_lua(lua_State *L, const char *str)
 static char*
 load_file(const char *fname)
 {
-  int64_t sz = sl_file_size(fname);
+  int64_t sz = gkyl_file_size(fname);
   char *buff = gkyl_malloc(sz+1);
   FILE *fp = fopen(fname, "r");
   int n = fread(buff, sz, 1, fp);
@@ -51,25 +32,22 @@ load_file(const char *fname)
   return buff;
 }
 
-
 int
 main(int argc, char **argv)
 {
   lua_State *L = luaL_newstate();
   lua_gc(L, LUA_GCSTOP, 0);
   luaL_openlibs(L);
-  lua_gc(L, LUA_GCRESTART, -1);  
+  lua_gc(L, LUA_GCRESTART, -1);
   
   if (argc > 1) {
-    if (sl_check_file_exists(argv[1])) {
-      char *buff = load_file(argv[1]);
+    if (gkyl_check_file_exists(argv[1])) {
+      // set input file name as global
+      lua_pushstring(L, argv[1]);
+      lua_setglobal(L, "DGC_INP_NAME");
 
-      // set input file name as a global
-      char set_inp_name[2000];
-      snprintf(set_inp_name, sizeof set_inp_name, "DGC_INP_NAME = \"%s\"", argv[1]);
-      run_lua(L, set_inp_name);
-      
-      run_lua(L, buff);
+      char *buff = load_file(argv[1]);
+      run_lua(L, buff); // run contents of input file
       gkyl_free(buff);
     }
   }
