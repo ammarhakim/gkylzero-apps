@@ -132,8 +132,7 @@ struct dgc_app {
   bool is_first_energy_write_call;
   gkyl_dynvec em_energy;
 
-  struct app_skin_ghost_ranges skin_ghost; // conf-space skin/ghost
-  struct mv_array *bc_buffer; // buffer for periodic BCs
+  struct gkyl_comm *comm;
 
   evalf_t init_E, init_B;
   void *ctx;
@@ -171,41 +170,32 @@ dgc_app_new(const struct dgc_inp *inp)
   app->init_B = inp->init_B;
   app->ctx = inp->ctx;
 
-  skin_ghost_ranges_init(&app->skin_ghost, &app->local_ext, nghost);
+  int cuts[GKYL_MAX_CDIM] = { 1, 1, 1 };
+  struct gkyl_rect_decomp *decomp = gkyl_rect_decomp_new_from_cuts(ndim,
+    cuts, &app->local);
 
-  // allocate buffer for applying BCs (used for periodic BCs)
-  long buff_sz = 0;
-  // compute buffer size needed
-  for (int d=0; d<inp->ndim; ++d) {
-    long vol = app->skin_ghost.lower_skin[d].volume;
-    buff_sz = buff_sz > vol ? buff_sz : vol;
-  }
-  app->bc_buffer = mv_array_new(buff_sz);
+  app->comm = gkyl_null_comm_new( &(struct gkyl_null_comm_inp) {
+      .decomp = decomp
+    }
+  );
+
+  gkyl_rect_decomp_release(decomp);
 
   return app;
-}
-
-// apply periodic BCs
-static void
-apply_periodic_bc(const struct dgc_app *app, struct gkyl_array *bc_buffer,
-  int dir, struct gkyl_array *f)
-{
-  gkyl_array_copy_to_buffer(bc_buffer->data, f, app->skin_ghost.lower_skin[dir]);
-  gkyl_array_copy_from_buffer(f, bc_buffer->data, app->skin_ghost.upper_ghost[dir]);
-
-  gkyl_array_copy_to_buffer(bc_buffer->data, f, app->skin_ghost.upper_skin[dir]);
-  gkyl_array_copy_from_buffer(f, bc_buffer->data, app->skin_ghost.lower_ghost[dir]);
 }
 
 static void
 apply_bc(const struct dgc_app *app, struct mv_array *mv_arr)
 {
-  for (int d=0; d<app->grid.ndim; ++d) {
-    apply_periodic_bc(app, app->bc_buffer->m0, d, mv_arr->m0);
-    apply_periodic_bc(app, app->bc_buffer->m1, d, mv_arr->m1);
-    apply_periodic_bc(app, app->bc_buffer->m2, d, mv_arr->m2);
-    apply_periodic_bc(app, app->bc_buffer->ps, d, mv_arr->ps);
-  }  
+  int per_dirs[] = { 0, 1, 2 };
+  gkyl_comm_array_per_sync(app->comm, &app->local, &app->local_ext,
+    app->ndim, per_dirs, mv_arr->m0);
+  gkyl_comm_array_per_sync(app->comm, &app->local, &app->local_ext,
+    app->ndim, per_dirs, mv_arr->m1);
+  gkyl_comm_array_per_sync(app->comm, &app->local, &app->local_ext,
+    app->ndim, per_dirs, mv_arr->m2);
+  gkyl_comm_array_per_sync(app->comm, &app->local, &app->local_ext,
+    app->ndim, per_dirs, mv_arr->ps);  
 }
 
 void
@@ -517,7 +507,7 @@ dgc_app_calc_em_energy(const dgc_app *app, double tm)
   while ( gkyl_range_iter_next(&iter) ) {
     long lidx = gkyl_range_idx(&app->local, iter.idx);
 
-    const double *a_I = gkyl_array_cfetch(app->Ffull->m1, lidx);    
+    const double *a_I = gkyl_array_cfetch(app->Ffull->m1, lidx);
     const double *b_I = gkyl_array_cfetch(app->Ffull->m2, lidx);
 
     em_energy[0] += SQ(a_I[0]);
@@ -527,7 +517,6 @@ dgc_app_calc_em_energy(const dgc_app *app, double tm)
     em_energy[3] += SQ(b_I[0]);
     em_energy[4] += SQ(b_I[1]);
     em_energy[5] += SQ(b_I[2]);
-
   }
 
   for (int c=0; c<6; ++c) em_energy[c] *= vol;
@@ -544,8 +533,8 @@ dgc_app_release(struct dgc_app *app)
   mv_array_release(app->Ffull);
   mv_array_release(app->Ffull_new);
   mv_array_release(app->gradf);
-  mv_array_release(app->bc_buffer);
 
+  gkyl_comm_release(app->comm);
   gkyl_dynvec_release(app->em_energy);
   
   gkyl_free(app);
