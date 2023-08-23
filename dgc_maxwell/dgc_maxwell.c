@@ -174,7 +174,7 @@ dgc_app_new(const struct dgc_inp *inp)
   struct gkyl_rect_decomp *decomp = gkyl_rect_decomp_new_from_cuts(ndim,
     cuts, &app->local);
 
-  app->comm = gkyl_null_comm_new( &(struct gkyl_null_comm_inp) {
+  app->comm = gkyl_null_comm_inew( &(struct gkyl_null_comm_inp) {
       .decomp = decomp
     }
   );
