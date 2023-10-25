@@ -71,11 +71,11 @@ endif
 USING_LUA =
 LUA_INC_DIR = . # dummy
 LUA_LIB_DIR = .
-ifeq (${CONF_USE_LUA}, 1)
+ifeq (${USE_LUA}, 1)
 	USING_LUA = yes
-	LUA_INC_DIR = ${CONF_LUA_INC}
-	LUA_LIB_DIR = ${CONF_LUA_LIB_DIR}
-	LUA_LIBS = ${CONF_LUA_LIBS}
+	LUA_INC_DIR = ${LUA_INC}
+	LUA_LIB_DIR = 
+	LUA_LIBS = ${LUA_LIB}
 	CFLAGS += -DGKYL_HAVE_LUA
 endif
 
@@ -86,7 +86,7 @@ EXT_LIBS = ${LAPACK_LIB} ${SUPERLU_LIB} ${MPI_LIBS}
 all: vmdriver
 
 vmdriver: vmdriver.c
-	${CC} -O2 vmdriver.c -o vmdriver ${INCLUDES} ${EXTRA_LINK_FLAGS} -L${G0_LIB_DIR} ${G0_RPATH} ${G0_LIBS} ${LIB_DIRS} ${EXT_LIBS} ${LUA_LIBS} -ldl
+	${CC} ${CFLAGS} vmdriver.c -o vmdriver ${INCLUDES} ${EXTRA_LINK_FLAGS} -L${G0_LIB_DIR} ${G0_RPATH} ${G0_LIBS} ${LIB_DIRS} ${EXT_LIBS} ${LUA_LIBS} -ldl
 
 .PHONY: clean
 clean: ## Clean build outputs

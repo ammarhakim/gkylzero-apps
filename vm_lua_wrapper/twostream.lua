@@ -1,7 +1,5 @@
 -- Lua driver for two-stream problem
 
-print("Hello, World!")
-
 knumber = 0.5    -- Eave-number.
 elVTerm = 0.2    -- Electron thermal velocity.
 vDrift = 1.0    -- Drift velocity.
@@ -57,4 +55,4 @@ vlasovApp = Plasma.App {
    },
 }
 -- Run application.
-vlasovApp:run()
+vlasovApp:run(4)
