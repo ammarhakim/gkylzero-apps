@@ -61,8 +61,8 @@ MPI_INC_DIR = . # dummy
 MPI_LIB_DIR = .
 ifeq (${USE_MPI}, 1)
 	USING_MPI = yes
-	MPI_INC_DIR = ${MPI_INC}
-	MPI_LIB_DIR = ${MPI_LIB}
+	MPI_INC_DIR = ${CONF_MPI_INC_DIR}
+	MPI_LIB_DIR = ${CONF_MPI_LIB_DIR}
 	MPI_LIBS = -lmpi
 	CFLAGS += -DGKYL_HAVE_MPI
 endif
