@@ -47,7 +47,7 @@ ifeq ($(UNAME), Darwin)
 	LAPACK_INC = . # dummy
 	LAPACK_LIB = -framework Accelerate
 	CFLAGS += -DGKYL_USING_FRAMEWORK_ACCELERATE
-	EXTRA_LINK_FLAGS += -pagezero_size 10000 -image_base 100000000
+	EXTRA_LINK_FLAGS += 
 endif
 
 # On Linux we need to pass proper link flags to export all symbols
