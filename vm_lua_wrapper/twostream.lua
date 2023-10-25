@@ -1,29 +1,29 @@
--- Lua driver for two-stream problem
+local Plasma = G0.Vlasov
 
-knumber = 0.5    -- Eave-number.
-elVTerm = 0.2    -- Electron thermal velocity.
-vDrift = 1.0    -- Drift velocity.
+knumber = 0.5 -- wave-number.
+elVTerm = 0.2 -- Electron thermal velocity.
+vDrift = 1.0 -- Drift velocity.
 perturbation = 1.0e-6 -- Distribution function perturbation.
 
-vlasovApp = Plasma.App {
+vlasovApp = Plasma.App.new {
+   tEnd = 40.0,
+   nFrame = 1,
 
-   tEnd = 40.0,               -- End time.
-   nFrame = 1,                  -- Number of output frames.
    lower = {-math.pi/knumber}, -- Configuration space lower left.
    upper = { math.pi/knumber}, -- Configuration space upper right.
-   cells = {64},               -- Configuration space cells.
-   basis = "serendipity",      -- One of "serendipity" or "maximal-order".
-   polyOrder = 1,                  -- Polynomial order.
-   timeStepper = "rk3",              -- One of "rk2" or "rk3".
+   cells = {64}, -- Configuration space cells.
+   basis = "serendipity", -- One of "serendipity" or "maximal-order".
+   polyOrder = 2, -- Polynomial order.
+   timeStepper = "rk3", -- One of "rk2" or "rk3".
 
    -- Decomposition for configuration space.
-   decompCuts = {1},   -- cuts in each configuration direction.
+   decompCuts = {1}, -- cuts in each configuration direction.
 
    -- Boundary conditions for configuration space.
    periodicDirs = {1}, -- Periodic directions.
 
    -- Electrons.
-   elc = Plasma.Species {
+   elc = Plasma.Species.new {
       charge = -1.0,  mass = 1.0,
       -- Velocity space grid.
       lower = {-6.0},
@@ -40,11 +40,10 @@ vlasovApp = Plasma.App {
 	 return (1+alpha*math.cos(k*x))*fv
       end,
       evolve = true, -- Evolve species?
-      diagnostics = { "M0", "M1i", "intM0", "M2", "intM2Flow" },
+      diagnostics = { "M0", "M1i", "M2", "intM0" },
    },
 
-   -- Field solver.
-   field = Plasma.Field {
+   field = Plasma.Field.new {
       epsilon0 = 1.0,  mu0 = 1.0,
       init = function (t, xn)
 	 local alpha = perturbation
@@ -52,7 +51,6 @@ vlasovApp = Plasma.App {
 	 return -alpha*math.sin(k*xn[1])/k, 0.0, 0.0, 0.0, 0.0, 0.0
       end,
       evolve = true, -- Evolve field?
-   },
+   }
 }
--- Run application.
-vlasovApp:run(4)
+vlasovApp:run()
