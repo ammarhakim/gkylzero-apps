@@ -1,0 +1,10 @@
+Gkeyll postprocessing scripts
+=============================
+
+This folder keeps postprocessing scripts that people develop for their own work, which may be useful to others and which has not yet made it into `postgkyl <https://github.com/ammarhakim/postgkyl>`_.
+
+Some suggestions:
+1. Create a folder with your first name initial and last name, and place/develop your scripts within it.
+2. You are free to use scripts from others. You are also free to contribute to them, but in that case do so in a branch and have the owner of that folder review your PR.
+3. Please follow good coding/version control practices.
+
