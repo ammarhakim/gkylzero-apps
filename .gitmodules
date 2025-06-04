@@ -1,3 +1,6 @@
 [submodule "postgkyl-scripts/ahoffmann"]
 	path = postgkyl-scripts/ahoffmann
 	url = https://github.com/Antoinehoff/personal_gkyl_scripts
+[submodule "postgkyl-scripts/mrosen/postgkylscripts/mrosen"]
+	path = postgkyl-scripts/mrosen/postgkylscripts/mrosen
+	url = https://github.com/Maxwell-Rosen/gkylmax.git
