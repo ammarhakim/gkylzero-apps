@@ -9,7 +9,8 @@ Some suggestions:
 3. Please follow good coding/version control practices.
 
 Alternative method: git submodule
-1. git submodule add https://github.com/user/mypersonnalrepo.git postgkyl-scripts/mydirectoryname
-2. git submodule update --init --recursive
-3. git commit -m "Add my repository as a submodule"
-4. (Optional) git push
+1. Stay in the gkylzero-apps folder to execute these commands
+2. git submodule add https://github.com/user/mypersonnalrepo.git postgkyl-scripts/mydirectoryname
+3. git submodule update --init --recursive
+4. git commit -m "Add my repository as a submodule"
+5. (Optional) git push
