@@ -5,6 +5,8 @@ import matplotlib.pyplot as plt
 import scipy.constants as syc
 from matplotlib.pyplot import cm
 
+# Author: J. Roeltgen
+
 # Class containing a single fit
 class rad_fit_parameters:
     def __init__(self, ne, A, alpha, beta, V0, gamma, te_intervals, te, Lz):
@@ -31,7 +33,9 @@ class rad_fit_parameters:
             vmag[:,i] = np.sqrt(vpar**2+2*B*mu2/syc.m_e)
         V0 = self.V0*np.sqrt(2*syc.elementary_charge/syc.m_e)
         x = vmag/V0
+        mask = vmag==0
         nu = self.A*(self.alpha+self.beta)/(self.beta*(x**-self.alpha)+self.alpha*x**self.beta)*vmag**self.gamma
+        nu[mask]=0
         return nu/self.c_const
 
     def calc_nuprime(self, vpar=None,  mu=None, B=1):
@@ -39,6 +43,8 @@ class rad_fit_parameters:
             vpar = self.vpar_nup
         if (mu is None):
             mu = self.mu_nup
+        self.vpar_nup=vpar
+        self.mu_nup=mu
         self.nuprime = np.zeros((len(vpar),len(mu)))
         nu = self.calc_nu(vpar,mu,B)
         for i,v in enumerate(vpar):
@@ -49,6 +55,8 @@ class rad_fit_parameters:
             vpar = self.vpar_nupp
         if (mu is None):
             mu = self.mu_nupp
+        self.vpar_nupp=vpar
+        self.mu_nupp=mu
         self.nudoubleprime = np.zeros((len(vpar),len(mu)))
         nu = self.calc_nu(vpar,mu,B)
         for i,mu2 in enumerate(mu):
