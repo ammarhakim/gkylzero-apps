@@ -24,42 +24,40 @@ def cartesian_to_cylindrical_vector(vx, vy, vz, x, y):
 
     return v_R, v_phi, v_Z
 
-def calc_b_cyl(prefix, arr_slice):
+def get_U_cyl_comp(prefix, xCart, yCart, U_vals):
     # Load bcart. 
-    bcart_data = pg.data.GData(prefix+"-bcart.gkyl", mapc2p_name=prefix+"-mapc2p.gkyl")
-    _, b_x = utils.interpolate_field(bcart_data, 0)
-    _, b_y = utils.interpolate_field(bcart_data, 1)
-    _, b_z = utils.interpolate_field(bcart_data, 2)
-    bxFlat = b_x[arr_slice,0].flatten()
-    byFlat = b_y[arr_slice,0].flatten()
-    bzFlat = b_z[arr_slice,0].flatten()
+    bcart_data = pg.GData(prefix+"-bcart.gkyl")
+    dg = pg.data.GInterpModal(bcart_data, 1, 'ms')
+    cdim = 3
+    dg_coef = np.sqrt(2)**cdim
+    b_x = dg._getRawModal(0)[:,0,:,0]/dg_coef
+    b_y = dg._getRawModal(1)[:,0,:,0]/dg_coef
+    b_z = dg._getRawModal(2)[:,0,:,0]/dg_coef
+    bxFlat = b_x.flatten()
+    byFlat = b_y.flatten()
+    bzFlat = b_z.flatten()
+    orig_shape = U_vals.shape
+    U_flat = U_vals.flatten()
 
     b_R = np.zeros(np.shape(bxFlat))
     b_phi = np.zeros(np.shape(bxFlat))
     b_Z = np.zeros(np.shape(bxFlat))
     for i in range(len(bxFlat)):
         b_R[i], b_phi[i], b_Z[i] = cartesian_to_cylindrical_vector(bxFlat[i], byFlat[i], bzFlat[i], xCart[i], yCart[i])
-    return b_R, b_phi, b_Z
+    
+    return (b_R*U_flat).reshape(orig_shape), (b_phi*U_flat).reshape(orig_shape), (b_Z*U_flat).reshape(orig_shape)
 
 # Some physical constants
 me = utils.mass_elc
 mi = utils.mass_proton*2.014
 eV = utils.elem_charge
 
-if len(sys.argv) < 3:
-    print("Usage: python plot-mapc2p-grid.py <species_name> <frame_no>")
-    sys.exit("Error: No species name / frame num provided.")
+if len(sys.argv) < 2:
+    print("Usage: python mapc2p-elements-fields.py <frame_no>")
+    sys.exit("Error: No frame num provided.")
 
 # Parse command-line arguments.
-sname = sys.argv[1]
-frame = sys.argv[2] # frame is always used as string here.
-
-if sname == "elc": 
-    mass = me
-elif sname == "ion":
-    mass = mi
-else:
-    sys.exit("Error: Species name must be ion/elc.")
+frame = sys.argv[1] # frame is always used as string here.
 
 # Find the file prefix using the helper function from utils.
 prefix = utils.find_prefix('-mapc2p.gkyl', '.')
@@ -67,20 +65,14 @@ prefix = utils.find_prefix('-mapc2p.gkyl', '.')
 # Create degas-inp dir if it doesn't exist yet.
 os.makedirs("degas-inp", exist_ok=True)
 
-# Load data with mapc2p information.
-fld_data = pg.data.GData(prefix+"-"+sname+"_BiMaxwellianMoments_"+frame+".gkyl", mapc2p_name=prefix+"-mapc2p.gkyl")
-dg = pg.GInterpModal(fld_data)
-dg.interpolate(overwrite=True)
+# Load nodes data.
+data = pg.GData(prefix+"-nodes.gkyl")
+node_vals = data.get_values()
+X = node_vals[:,0,:,0]
+Y = node_vals[:,0,:,1]
+Z = node_vals[:,0,:,2]
+R = np.sqrt(X**2 + Y**2)
 
-arr_slice = (slice(None, None, 2), 0, slice(None, None, 2))
-arr_slice_fld = (slice(None, None, 2), 0, slice(None, None, 2), 0)
-
-# Step 0: Get grid and (x,y) coordinates
-grid = fld_data.get_grid()
-print(np.shape(grid[0]))
-X = grid[0][arr_slice]
-Y = grid[1][arr_slice]
-Z = grid[2][arr_slice]
 xCart = X.flatten()
 yCart = Y.flatten()
 zCart = Z.flatten()
@@ -115,24 +107,65 @@ for i in range(Nx - 1):
 print(f"Total nodes: {len(nodes)}")
 print(f"Total elements: {len(elements)}")
 
-# Define mapping between gkyl grid and RZ grid and interpolate the BiMaxwellian moms
-moms_data_gkyl = pg.GData(prefix+"-"+sname+"_BiMaxwellianMoments_"+frame+".gkyl")
-grid_gkyl, m0 = utils.interpolate_field(moms_data_gkyl, 0)
+# Get elc and ion BiMaxwellian moms data
+moms_data_gkyl = pg.GData(prefix+"-elc_BiMaxwellianMoments_"+frame+".gkyl")
+dg = pg.data.GInterpModal(moms_data_gkyl, 1, 'ms')
+cdim = 3
+dg_coef = np.sqrt(2)**cdim
+elcM0 = dg._getRawModal(0)[:,0,:,0]/dg_coef
+elcUpar = dg._getRawModal(1)[:,0,:,0]/dg_coef
+elcTpar = dg._getRawModal(2)[:,0,:,0]/dg_coef
+elcTperp = dg._getRawModal(3)[:,0,:,0]/dg_coef
+elcTemp = 2/3*elcTperp*me/eV + 1/3*elcTpar*me/eV
+
+# Ions
+moms_data_gkyl = pg.GData(prefix+"-ion_BiMaxwellianMoments_"+frame+".gkyl")
+dg = pg.data.GInterpModal(moms_data_gkyl, 1, 'ms')
+ionM0 = dg._getRawModal(0)[:,0,:,0]/dg_coef
+ionUpar = dg._getRawModal(1)[:,0,:,0]/dg_coef
+ionTpar = dg._getRawModal(2)[:,0,:,0]/dg_coef
+ionTperp = dg._getRawModal(3)[:,0,:,0]/dg_coef
+ionTemp = 2/3*ionTperp*mi/eV + 1/3*ionTpar*mi/eV
+
+# Get cylindrical components of Upar
+elcU_R, elcU_phi, elcU_Z = get_U_cyl_comp(prefix, xCart, yCart, elcUpar)
+ionU_R, ionU_phi, ionU_Z = get_U_cyl_comp(prefix, xCart, yCart, ionUpar)
+
+biMaxMomsStr = ["elcM0", "elcTemp", "elcU_R", "elcU_phi", "elcU_Z", "ionM0", "ionTemp", "ionU_R", "nionU_phi", "ionU_Z"]
+biMaxMomsUnits = [r"m$^{-3}$", "eV",  "m/s", "m/s", "m/s",  r"m$^{-3}$", "eV",  "m/s", "m/s", "m/s",]
+biMaxMoms = [elcM0, elcTemp, elcU_R, elcU_phi, elcU_Z, ionM0, ionTemp, ionU_R, ionU_phi, ionU_Z]
+
+biMaxMomsStr = ["elcM0", "elcTemp", "elcUpar", "ionM0", "ionTemp", "ionUpar"]
+biMaxMomsUnits = [r"m$^{-3}$", "eV",  "m/s", r"m$^{-3}$", "eV", "m/s"]
+biMaxMoms = [elcM0, elcTemp, elcUpar, ionM0, ionTemp, ionUpar]
+
+# Plot 3 subplots
+fig, axes = plt.subplots(2, len(biMaxMoms)//2, figsize=(15, 8), constrained_layout=True)
+axes = axes.flatten()
+print(len(axes))
+
+for i, ax in enumerate(axes):
+    print(i)
+    pcm = ax.pcolormesh(R, Z, biMaxMoms[i], shading='auto')
+    ax.set_aspect('equal')
+    ax.set_title(f"{biMaxMomsStr[i]}")
+    ax.set_xlabel("R [m]")
+    ax.set_ylabel("Z [m]")
+
+    # Add individual, appropriately sized colorbars
+    cbar = fig.colorbar(pcm, ax=ax, aspect=20)
+    cbar.set_label(biMaxMomsUnits[i])
+
+plt.savefig(f"mapc2p-{prefix}-biMaxMoms.png")
+plt.show()
+
+#-------------Write output files for DEGAS2 coupling------------#
+
+# Gkyl grid data for mapping.
+grid_gkyl, _ = utils.interpolate_field(moms_data_gkyl, 0)
 Th_gkyl, X_gkyl = np.meshgrid(grid_gkyl[2][::2], grid_gkyl[0][::2],)
 print(np.shape(X_gkyl))
 print(np.shape(R))
-
-# Interp, slice and store BiMax Moments
-_, upar = utils.interpolate_field(moms_data_gkyl, 1)
-_, Tpar = utils.interpolate_field(moms_data_gkyl, 2)
-_, Tperp = utils.interpolate_field(moms_data_gkyl, 3)
-Temp = 2/3*Tperp*mass/eV + 1/3*Tpar*mass/eV
-biMaxMomsStr = ["M0", "Upar", "Temp"]
-biMaxMomsUnits = [r"m$^{-3}", "m/s", "eV"]
-biMaxMoms = []
-biMaxMoms.append(m0[arr_slice_fld])
-biMaxMoms.append(upar[arr_slice_fld])
-biMaxMoms.append(Temp[arr_slice_fld])
 
 # Write nodes to ASCII file
 with open("degas-inp/nodes-"+prefix+".txt", "w") as f:
@@ -157,24 +190,23 @@ with open("degas-inp/map-nodes-RZ-to-gkyl-"+prefix + ".txt", "w") as f:
     for i, (r_val, z_val, x_val, y_val) in enumerate(zip(R_flat, Z_flat, X_flat, Th_flat)):
         f.write(f"{i:<8d} {r_val:.10e} {z_val:.10e} {x_val:.10e} {y_val:.10e}\n")
 
-# For plotting fields
-values = fld_data.get_values()
-vals2d = values[arr_slice_fld]
-fig = plt.figure(figsize=(5,6))
-ax = plt.pcolormesh(R, Z, vals2d)
-ax.axes.set_aspect('equal')
-plt.title(sname+" m0")
-plt.colorbar()
-plt.savefig("mapc2p-"+prefix+"-"+sname+"m0.png")
-plt.show()
-
 # Write out the field values, element-wise
-element_values = []
-for i in range(Nx - 1):
-    for j in range(Nz - 1):
-        element_values.append(vals2d[i, j])
+biMaxMomsStr = ["elcM0", "elcTemp", "elcU_R", "elcU_phi", "elcU_Z", "ionM0", "ionTemp", "ionU_R", "nionU_phi", "ionU_Z"]
+biMaxMomsUnits = [r"m$^{-3}$", "eV",  "m/s", "m/s", "m/s",  r"m$^{-3}$", "eV",  "m/s", "m/s", "m/s",]
+biMaxMoms = [elcM0, elcTemp, elcU_R, elcU_phi, elcU_Z, ionM0, ionTemp, ionU_R, ionU_phi, ionU_Z]
 
-with open("degas-inp/element_"+field_name+"_values.txt", "w") as f:
-    f.write("# ElementID   FieldValue\n")
-    for k, val in enumerate(element_values):
-        f.write(f"{k:<10d} {val:.10e}\n")
+# Open single file for writing
+with open("degas-inp/species_moms_values_vs_element.txt", "w") as f:
+    # Write header
+    header = "ElementID " + " ".join(f"{name} [{unit}]" for name, unit in zip(biMaxMomsStr, biMaxMomsUnits)) + "\n"
+    f.write("# " + header)
+
+    # Loop through elements (assumes uniform grid for all fields)
+    for i in range(Nx - 1):
+        for j in range(Nz - 1):
+            elem_id = i * (Nz - 1) + j
+            values = [field[i, j] for field in biMaxMoms]
+            line = f"{elem_id:<9d} " + " ".join(f"{val:15.8e}" for val in values) + "\n"
+            f.write(line)
+
+print("Wrote degas-inp/species_moms_values_vs_element.txt")
