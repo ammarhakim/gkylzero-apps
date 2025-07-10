@@ -5,67 +5,7 @@ import numpy as np
 import postgkyl as pg
 import matplotlib as mpl
 import h5py
-
-def find_prefix(pattern, path):
-    for name in os.listdir(path):
-        if fnmatch.fnmatch(name, '*' + pattern):
-            return re.sub(pattern, '', name)
-    raise FileNotFoundError("ERROR: file prefix not found!")
-
-def get_center_coords(interp_grid):
-    return [(grid[1:] + grid[:-1]) / 2 for grid in interp_grid]
-
-def interpolate_field(field3d, comp):
-    interp = pg.data.GInterpModal(field3d, 1, 'ms')
-    return interp.interpolate(comp)
-
-def get_slice_index(z_vals, z_idx):
-    return 0 if z_idx == 0 else len(z_vals) // 2
-
-def func_data_yave(field3d, comp, z_idx):
-    grid, values = interpolate_field(field3d, comp)
-    CCC = get_center_coords(grid)
-    z_slice = get_slice_index(CCC[2], z_idx)
-    return CCC[0], np.mean(values[:, :, z_slice, 0], axis=1)
-
-def func_data_2d(field3d, comp, z_idx):
-    grid, values = interpolate_field(field3d, comp)
-    CCC = get_center_coords(grid)
-    z_slice = get_slice_index(CCC[2], z_idx)
-    return CCC[0], CCC[1], values[:, :, z_slice, 0]
-
-def func_calc_VE(phi3d, bmag2d, z_idx):
-    grid, values = interpolate_field(phi3d, 0)
-    CCC = get_center_coords(grid)
-    x_vals, y_vals, z_vals = CCC
-    z_slice = get_slice_index(z_vals, z_idx)
-    phi = values[:, :, z_slice, 0]
-    dx, dy = x_vals[1] - x_vals[0], y_vals[1] - y_vals[0]
-    Ex = -np.gradient(phi, dx, axis=0)
-    Ey = -np.gradient(phi, dy, axis=1)
-    VE_x = Ey / bmag2d
-    VE_y = -np.mean(Ex, axis=1) / np.mean(bmag2d, axis=1)
-    VE_shear = np.gradient(VE_y, dx, axis=0)
-    return VE_x, VE_y, VE_shear, np.mean(Ex, axis=1)
-
-def func_time_ave(data_list):
-    return np.mean(np.array(data_list), axis=0)
-
-def func_calc_norm_fluc(data2d, dataAve, dataNorm, Nt, Ny, Nx):
-    data2dTot = np.reshape(data2d, (Nt * Ny, Nx))
-    dataAve2d = np.array([dataAve] * (Nt * Ny))
-    delt = data2dTot - dataAve2d
-    sigma = np.sqrt(np.mean(delt ** 2, axis=0))
-    delt_norm = sigma / dataNorm
-    return delt, delt_norm
-
-def save_to_hdf5(filename, x_vals, diagnostics, metadata):
-    with h5py.File(filename, "w") as f:
-        f.create_dataset("x_vals", data=x_vals)
-        for name, data in diagnostics.items():
-            f.create_dataset(name, data=data)
-        for key, value in metadata.items():
-            f.attrs[key] = value
+import utils
 
 # convert x_vals to rho, parsing information from the input file
 def main():
@@ -75,7 +15,7 @@ def main():
     me = 9.10938188e-31
     eV = 1.602e-19
 
-    file_prefix = find_prefix('-field_0.gkyl', '.')
+    file_prefix = utils.find_prefix('-field_0.gkyl', '.')
     print(f"Using file prefix: {file_prefix}")
 
     fstart = int(input("fstart? "))
@@ -84,7 +24,7 @@ def main():
     z_str = 'zmid'
 
     bmag_data = pg.GData(f"{file_prefix}-bmag.gkyl")
-    _, y_vals, bmag_2d = func_data_2d(bmag_data, 0, z_idx)
+    _, y_vals, bmag_2d = utils.utils.func_data_2d(bmag_data, 0, z_idx)
 
     diag_names = ['phi', 'elcDens', 'ionDens', 'elcTemp', 'ionTemp', 'VEy', 'VEshear', 'p', 'Er']
     diagnostics = {name: [] for name in diag_names}
@@ -96,19 +36,19 @@ def main():
         ion_data = pg.data.GData(f"{file_prefix}-ion_BiMaxwellianMoments_{tf}.gkyl")
         phi_data = pg.data.GData(f"{file_prefix}-field_{tf}.gkyl")
 
-        x_vals, elc_dens = func_data_yave(elc_data, 0, z_idx)
-        x_vals, ion_dens = func_data_yave(ion_data, 0, z_idx)
+        x_vals, elc_dens = utils.func_data_yave(elc_data, 0, z_idx)
+        x_vals, ion_dens = utils.func_data_yave(ion_data, 0, z_idx)
 
-        x_vals, elc_Tpar = func_data_yave(elc_data, 2, z_idx)
-        x_vals, elc_Tperp = func_data_yave(elc_data, 3, z_idx)
+        x_vals, elc_Tpar = utils.func_data_yave(elc_data, 2, z_idx)
+        x_vals, elc_Tperp = utils.func_data_yave(elc_data, 3, z_idx)
         elc_temp = (elc_Tpar + 2 * elc_Tperp) / 3 * me / eV
 
-        x_vals, ion_Tpar = func_data_yave(ion_data, 2, z_idx)
-        x_vals, ion_Tperp = func_data_yave(ion_data, 3, z_idx)
+        x_vals, ion_Tpar = utils.func_data_yave(ion_data, 2, z_idx)
+        x_vals, ion_Tperp = utils.func_data_yave(ion_data, 3, z_idx)
         ion_temp = (ion_Tpar + 2 * ion_Tperp) / 3 * mi / eV
 
-        x_vals, phi_vals = func_data_yave(phi_data, 0, z_idx)
-        VE_x, VE_y, VE_shear, Er = func_calc_VE(phi_data, bmag_2d, z_idx)
+        x_vals, phi_vals = utils.func_data_yave(phi_data, 0, z_idx)
+        VE_x, VE_y, VE_shear, Er = utils.func_calc_VE(phi_data, bmag_2d, z_idx)
 
         diagnostics['elcDens'].append(elc_dens)
         diagnostics['ionDens'].append(ion_dens)
@@ -123,24 +63,24 @@ def main():
         # Transpose the following data to make it easier to do turbulence statistics
         VEx2dTot.append(VE_x.T)
 
-        _, _, elc_dens2d = func_data_2d(elc_data, 0, z_idx)
+        _, _, elc_dens2d = utils.func_data_2d(elc_data, 0, z_idx)
         elcDens2dTot.append(elc_dens2d.T)
 
-        _, _, elc_temp2d = func_data_2d(elc_data, 2, z_idx)
+        _, _, elc_temp2d = utils.func_data_2d(elc_data, 2, z_idx)
         elcTemp2dTot.append(elc_temp2d.T * me / eV)
 
-        _, _, ion_temp2d = func_data_2d(ion_data, 2, z_idx)
+        _, _, ion_temp2d = utils.func_data_2d(ion_data, 2, z_idx)
         ionTemp2dTot.append(ion_temp2d.T * mi / eV)
 
-        _, _, phi2d = func_data_2d(phi_data, 0, z_idx)
+        _, _, phi2d = utils.func_data_2d(phi_data, 0, z_idx)
         phi2dTot.append(phi2d.T)
 
     Nt, Nx, Ny = len(elcDens2dTot), len(x_vals), len(y_vals)
-    elcDensAve = func_time_ave(diagnostics['elcDens'])
-    elcTempAve = func_time_ave(diagnostics['elcTemp'])
-    ionDensAve = func_time_ave(diagnostics['ionDens'])
-    ionTempAve = func_time_ave(diagnostics['ionTemp'])
-    phiAve = func_time_ave(diagnostics['phi'])
+    elcDensAve = utils.func_time_ave(diagnostics['elcDens'])
+    elcTempAve = utils.func_time_ave(diagnostics['elcTemp'])
+    ionDensAve = utils.func_time_ave(diagnostics['ionDens'])
+    ionTempAve = utils.func_time_ave(diagnostics['ionTemp'])
+    phiAve = utils.func_time_ave(diagnostics['phi'])
 
     elcDens2dTot = np.array(elcDens2dTot)
     elcTemp2dTot = np.array(elcTemp2dTot)
@@ -162,9 +102,9 @@ def main():
     Qxe = elcDensAve * np.mean(dTeQr * dVEx, axis=(0, 1)) + Gx * elcTempAve
     Qxi = ionDensAve * np.mean(dTiQr * dVEx, axis=(0, 1)) + Gx * ionTempAve
 
-    dn, dn_norm = func_calc_norm_fluc(elcDens2dTot, elcDensAve, elcDensAve, Nt, Ny, Nx)
-    dT, dT_norm = func_calc_norm_fluc(elcTemp2dTot, elcTempAve, elcTempAve, Nt, Ny, Nx)
-    dphi, dphi_norm = func_calc_norm_fluc(phi2dTot, phiAve, elcTempAve, Nt, Ny, Nx)
+    dn, dn_norm = utils.func_calc_norm_fluc(elcDens2dTot, elcDensAve, elcDensAve, Nt, Ny, Nx)
+    dT, dT_norm = utils.func_calc_norm_fluc(elcTemp2dTot, elcTempAve, elcTempAve, Nt, Ny, Nx)
+    dphi, dphi_norm = utils.func_calc_norm_fluc(phi2dTot, phiAve, elcTempAve, Nt, Ny, Nx)
 
     dnSq = dn * dn
     skew, kurt = [], []
@@ -199,14 +139,14 @@ def main():
         l_rad.append(-1.0 / coeffs[0])
         l_rad_err.append(coeffs[1])
 
-    averaged = {name + "Ave": func_time_ave(data) for name, data in diagnostics.items()}
+    averaged = {name + "Ave": utils.func_time_ave(data) for name, data in diagnostics.items()}
     all_results = {**averaged, "Gx": Gx, "Qxe": Qxe, "Qxi": Qxi,
                    "dn_norm": dn_norm, "dT_norm": dT_norm, "dphi_norm": dphi_norm,
                    "skew": skew, "kurt": kurt, "l_rad": l_rad, "l_rad_err": l_rad_err,
                    "xVals_new": xVals_new}
 
     metadata = {"fstart": fstart, "fend": fend, "zStr": z_str}
-    save_to_hdf5(f"diagnostics_{fstart}to{fend}_{z_str}.h5", x_vals, all_results, metadata)
+    utils.save_to_hdf5(f"diagnostics_{fstart}to{fend}_{z_str}.h5", x_vals, all_results, metadata)
 
 if __name__ == "__main__":
     main()
