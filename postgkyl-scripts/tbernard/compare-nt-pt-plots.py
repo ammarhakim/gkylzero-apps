@@ -75,11 +75,16 @@ def plot_potential_fields(file_posD, file_negD, lcfs_shift, show):
     x_pos -= lcfs_shift
     x_neg -= lcfs_shift
 
+    x_pos = x_pos[10:]
+    x_neg = x_neg[10:]
+
     fig, axs = plt.subplots(1, 3, figsize=(14, 4))
     for i, ax in enumerate(axs):
         field = fields[i + 3]
         _, pos_data = load_hdf5_field(file_posD, field)
         _, neg_data = load_hdf5_field(file_negD, field)
+        pos_data = pos_data[10:]
+        neg_data = neg_data[10:]
         if field == 'ErAve':
             pos_data /= 1e3
             neg_data /= 1e3
