@@ -6,14 +6,6 @@ import postgkyl as pg
 import matplotlib as mpl
 import h5py
 
-mpl.rcParams.update({
-    "text.usetex": True,
-    "font.family": "serif",
-    "font.serif": ["Palatino"],
-    "font.size": 12,
-    "image.cmap": 'inferno',
-})
-
 def find_prefix(pattern, path):
     for name in os.listdir(path):
         if fnmatch.fnmatch(name, '*' + pattern):
