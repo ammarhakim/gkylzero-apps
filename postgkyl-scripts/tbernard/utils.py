@@ -11,6 +11,15 @@ elem_charge = 1.602176634e-19  # Elementary charge [C]
 mass_proton = 1.67262192369e-27  # Proton mass [kg]
 mass_elc = 9.1093837015e-31     # Electron mass [kg]
 
+def integrated_moms(filename, comp=0):
+    """
+    Load integrated Hamiltonian moments from a file.
+    """
+    gdata = pg.data.GData(filename)
+    grid = gdata.get_grid()
+    values = gdata.get_values()
+    return np.array(grid[0]), np.array(values[:,comp]) if values.ndim > 1 else values
+
 def find_prefix(pattern, path):
     for name in os.listdir(path):
         if fnmatch.fnmatch(name, '*' + pattern):
@@ -38,6 +47,12 @@ def func_data_2d(field3d, comp, z_idx):
     CCC = get_center_coords(grid)
     z_slice = get_slice_index(CCC[2], z_idx)
     return CCC[0], CCC[1], values[:, :, z_slice, 0]
+
+def func_data_3d(filename, comp=0):
+    gdata = pg.data.GData(filename)
+    grid, values = interpolate_field(gdata, comp)
+    CCC = get_center_coords(grid)
+    return CCC[0], CCC[1], CCC[2], values[:, :, :, 0]
 
 def func_calc_VE(phi3d, bmag2d, z_idx):
     grid, values = interpolate_field(phi3d, 0)

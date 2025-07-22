@@ -13,21 +13,22 @@ titles = [
     r'c) $e\tilde{\phi}_{rms}/\langle{T_e}\rangle$'
 ]
 
-def load_hdf5_field(filepath, field):
+def load_hdf5_field(filepath, field, xstart_idx=0, xend_idx=None):
     with h5py.File(filepath, 'r') as f:
-        return f['x_vals'][:], f[field][:]
+        return f['x_vals'][xstart_idx:xend_idx], f[field][xstart_idx:xend_idx]
 
 def plot_profiles(file_posD, file_negD, lcfs_shift, show):
-    x_pos, _ = load_hdf5_field(file_posD, 'x_vals')
-    x_neg, _ = load_hdf5_field(file_negD, 'x_vals')
+    x_idx = 2
+    x_pos, _ = load_hdf5_field(file_posD, 'x_vals', x_idx)
+    x_neg, _ = load_hdf5_field(file_negD, 'x_vals', x_idx)
     x_pos -= lcfs_shift
     x_neg -= lcfs_shift
 
     fig, axs = plt.subplots(1, 3, figsize=(14, 4))
     for i, ax in enumerate(axs):
         field = fields[i]  # n_e, T_e, T_i
-        _, pos_data = load_hdf5_field(file_posD, field)
-        _, neg_data = load_hdf5_field(file_negD, field)
+        _, pos_data = load_hdf5_field(file_posD, field, x_idx)
+        _, neg_data = load_hdf5_field(file_negD, field, x_idx)
         ax.plot(x_pos, pos_data, label='PT', color='red', linewidth=2)
         ax.plot(x_neg, neg_data, label='NT', color='blue', linewidth=2)
         ax.axvline(x=0, color='gray')
@@ -44,16 +45,17 @@ def plot_profiles(file_posD, file_negD, lcfs_shift, show):
         plt.close()
 
 def plot_fluctuations(file_posD, file_negD, lcfs_shift, show):
-    x_pos, _ = load_hdf5_field(file_posD, 'x_vals')
-    x_neg, _ = load_hdf5_field(file_negD, 'x_vals')
+    x_idx = 2
+    x_pos, _ = load_hdf5_field(file_posD, 'x_vals', x_idx)
+    x_neg, _ = load_hdf5_field(file_negD, 'x_vals', x_idx)
     x_pos -= lcfs_shift
     x_neg -= lcfs_shift
 
     fig, axs = plt.subplots(1, 3, figsize=(14, 4))
     for i, ax in enumerate(axs):
         field = fields[i + 6]
-        _, pos_data = load_hdf5_field(file_posD, field)
-        _, neg_data = load_hdf5_field(file_negD, field)
+        _, pos_data = load_hdf5_field(file_posD, field, x_idx)
+        _, neg_data = load_hdf5_field(file_negD, field, x_idx)
         ax.plot(x_pos, pos_data, label='PT', color='red', linewidth=2)
         ax.plot(x_neg, neg_data, label='NT', color='blue', linewidth=2)
         ax.axvline(x=0, color='gray')
@@ -70,21 +72,17 @@ def plot_fluctuations(file_posD, file_negD, lcfs_shift, show):
         plt.close()
 
 def plot_potential_fields(file_posD, file_negD, lcfs_shift, show):
-    x_pos, _ = load_hdf5_field(file_posD, 'x_vals')
-    x_neg, _ = load_hdf5_field(file_negD, 'x_vals')
+    x_idx = 10
+    x_pos, _ = load_hdf5_field(file_posD, 'x_vals', x_idx)
+    x_neg, _ = load_hdf5_field(file_negD, 'x_vals', x_idx)
     x_pos -= lcfs_shift
     x_neg -= lcfs_shift
-
-    x_pos = x_pos[10:]
-    x_neg = x_neg[10:]
 
     fig, axs = plt.subplots(1, 3, figsize=(14, 4))
     for i, ax in enumerate(axs):
         field = fields[i + 3]
-        _, pos_data = load_hdf5_field(file_posD, field)
-        _, neg_data = load_hdf5_field(file_negD, field)
-        pos_data = pos_data[10:]
-        neg_data = neg_data[10:]
+        _, pos_data = load_hdf5_field(file_posD, field, x_idx)
+        _, neg_data = load_hdf5_field(file_negD, field, x_idx)
         if field == 'ErAve':
             pos_data /= 1e3
             neg_data /= 1e3
@@ -111,19 +109,29 @@ def plot_potential_fields(file_posD, file_negD, lcfs_shift, show):
 def plot_fluxes(file_posD, file_negD, lcfs_shift, show):
     x_pos, _ = load_hdf5_field(file_posD, 'x_vals')
     x_neg, _ = load_hdf5_field(file_negD, 'x_vals')
+    Nx = len(x_pos)
+    lcfs_idx = int(Nx * 2 / 3)
+    x_idx = 10
+
+    Gx_field, Qxe_field, Qxi_field, Qpara_field, ne_field = 'Gx', 'Qxe', 'Qxi', 'QparaAve', 'elcDensAve'
+
+    x_pos, Gx_pos = load_hdf5_field(file_posD, Gx_field, x_idx)
+    x_neg, Gx_neg = load_hdf5_field(file_negD, Gx_field, x_idx)
+    _, Qxe_pos = load_hdf5_field(file_posD, Qxe_field, x_idx)
+    _, Qxe_neg = load_hdf5_field(file_negD, Qxe_field, x_idx)
+    _, Qxi_pos = load_hdf5_field(file_posD, Qxi_field, x_idx)
+    _, Qxi_neg = load_hdf5_field(file_negD, Qxi_field, x_idx)
+    _, ne_pos = load_hdf5_field(file_posD, ne_field, x_idx)
+    _, ne_neg = load_hdf5_field(file_negD, ne_field, x_idx)
+    _, ne_pos_sol = load_hdf5_field(file_posD, ne_field, lcfs_idx, -5)
+    _, ne_neg_sol = load_hdf5_field(file_negD, ne_field, lcfs_idx, -5)
+    x_sol, Qpara_pos = load_hdf5_field(file_posD, Qpara_field, lcfs_idx, -5)
+    x_sol, Qpara_neg = load_hdf5_field(file_negD, Qpara_field, lcfs_idx, -5)
+    
+    # Shift x-axis to LCFS
     x_pos -= lcfs_shift
     x_neg -= lcfs_shift
-
-    Gx_field, Qxe_field, Qxi_field, ne_field = 'Gx', 'Qxe', 'Qxi', 'elcDensAve'
-
-    _, Gx_pos = load_hdf5_field(file_posD, Gx_field)
-    _, Gx_neg = load_hdf5_field(file_negD, Gx_field)
-    _, Qxe_pos = load_hdf5_field(file_posD, Qxe_field)
-    _, Qxe_neg = load_hdf5_field(file_negD, Qxe_field)
-    _, Qxi_pos = load_hdf5_field(file_posD, Qxi_field)
-    _, Qxi_neg = load_hdf5_field(file_negD, Qxi_field)
-    _, ne_pos = load_hdf5_field(file_posD, ne_field)
-    _, ne_neg = load_hdf5_field(file_negD, ne_field)
+    x_sol -= lcfs_shift     
 
     # Normalize by electron density
     Gx_pos /= ne_pos
@@ -132,16 +140,8 @@ def plot_fluxes(file_posD, file_negD, lcfs_shift, show):
     Qxe_neg /= ne_neg
     Qxi_pos /= ne_pos
     Qxi_neg /= ne_neg
-
-    # Crop to x_pos[10:]
-    x_pos = x_pos[10:]
-    x_neg = x_neg[10:]
-    Gx_pos = Gx_pos[10:]
-    Gx_neg = Gx_neg[10:]
-    Qxe_pos = Qxe_pos[10:]
-    Qxe_neg = Qxe_neg[10:]
-    Qxi_pos = Qxi_pos[10:]
-    Qxi_neg = Qxi_neg[10:]
+    Qpara_pos /= -ne_pos_sol
+    Qpara_neg /= -ne_neg_sol
 
     fig = plt.figure(figsize=(14, 4))
 
@@ -155,21 +155,20 @@ def plot_fluxes(file_posD, file_negD, lcfs_shift, show):
     ax.legend()
 
     ax = fig.add_subplot(132)
-    ax.set_title('b) Normalized heat flux')
-    ax.axvline(x=0, color='gray')
-    ax.plot(x_pos, Qxe_pos, label='elc PT', color='red', linewidth=2)
-    ax.plot(x_pos, Qxi_pos, label='ion PT', color='red', linestyle='--', linewidth=2)
-    ax.plot(x_neg, Qxe_neg, label='elc NT', color='blue', linewidth=2)
-    ax.plot(x_neg, Qxi_neg, label='ion NT', color='blue', linestyle='--', linewidth=2)
-    ax.set_xlabel(r'$R-R_{LCFS}$ (m)')
-    ax.set_ylabel(r'$Q_\perp / n_e$ (W s)')
-    ax.legend()
-
-    ax = fig.add_subplot(133)
-    ax.set_title('c) Total normalized heat flux')
+    ax.set_title('b) Normalized perpendicular heat flux')
     ax.axvline(x=0, color='gray')
     ax.plot(x_pos, Qxe_pos + Qxi_pos, label='PT', color='red', linewidth=2)
     ax.plot(x_neg, Qxe_neg + Qxi_neg, label='NT', color='blue', linewidth=2)
+    ax.set_xlabel(r'$R-R_{LCFS}$ (m)')
+    ax.set_ylabel(r'$(Q_{\perp,e} + Q_{\perp,i}) / n_e$ (W s)')
+    ax.legend()
+
+
+    ax = fig.add_subplot(133)
+    ax.set_title('c) Normalized parallel heat flux (at limiter)')
+    ax.axvline(x=0, color='gray')
+    ax.plot(x_sol, Qpara_pos, label='PT', color='red', linewidth=2)
+    ax.plot(x_sol, Qpara_neg, label='NT', color='blue', linewidth=2)
     ax.set_xlabel(r'$R-R_{LCFS}$ (m)')
     ax.set_ylabel(r'$(Q_{\parallel,e} + Q_{\parallel,i}) / n_e$ (W s)')
     ax.legend()

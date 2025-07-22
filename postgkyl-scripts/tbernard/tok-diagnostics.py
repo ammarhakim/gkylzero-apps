@@ -24,9 +24,15 @@ def main():
     z_str = 'zmid'
 
     bmag_data = pg.GData(f"{file_prefix}-bmag.gkyl")
-    _, y_vals, bmag_2d = utils.utils.func_data_2d(bmag_data, 0, z_idx)
+    _, y_vals, bmag_2d = utils.func_data_2d(bmag_data, 0, z_idx)
+    bi_data = pg.GData(f"{file_prefix}-b_i.gkyl")
+    _, _, bx = utils.func_data_2d(bi_data, 0, z_idx)
+    _, _, by = utils.func_data_2d(bi_data, 1, z_idx)
+    _, _, bz = utils.func_data_2d(bi_data, 2, z_idx)
+    jacgeo_data = pg.GData(f"{file_prefix}-jacobgeo.gkyl")
+    _, _, jacgeo = utils.func_data_2d(jacgeo_data, 0, z_idx)
 
-    diag_names = ['phi', 'elcDens', 'ionDens', 'elcTemp', 'ionTemp', 'VEy', 'VEshear', 'p', 'Er']
+    diag_names = ['phi', 'elcDens', 'ionDens', 'elcTemp', 'ionTemp', 'VEy', 'VEshear', 'p', 'Er', 'Qpara']
     diagnostics = {name: [] for name in diag_names}
     elcDens2dTot, elcTemp2dTot, ionTemp2dTot, phi2dTot = [], [], [], []
     VEx2dTot = []
@@ -35,6 +41,8 @@ def main():
         elc_data = pg.data.GData(f"{file_prefix}-elc_BiMaxwellianMoments_{tf}.gkyl")
         ion_data = pg.data.GData(f"{file_prefix}-ion_BiMaxwellianMoments_{tf}.gkyl")
         phi_data = pg.data.GData(f"{file_prefix}-field_{tf}.gkyl")
+        elc_qpara_data = pg.data.GData(f"{file_prefix}-elc_M3par_{tf}.gkyl")
+        ion_qpara_data = pg.data.GData(f"{file_prefix}-ion_M3par_{tf}.gkyl")
 
         x_vals, elc_dens = utils.func_data_yave(elc_data, 0, z_idx)
         x_vals, ion_dens = utils.func_data_yave(ion_data, 0, z_idx)
@@ -50,6 +58,9 @@ def main():
         x_vals, phi_vals = utils.func_data_yave(phi_data, 0, z_idx)
         VE_x, VE_y, VE_shear, Er = utils.func_calc_VE(phi_data, bmag_2d, z_idx)
 
+        _ , qpara_ion = utils.func_data_yave(ion_qpara_data, 0, -1)
+        _, qpara_elc = utils.func_data_yave(elc_qpara_data, 0, -1)
+
         diagnostics['elcDens'].append(elc_dens)
         diagnostics['ionDens'].append(ion_dens)
         diagnostics['elcTemp'].append(elc_temp)
@@ -59,6 +70,7 @@ def main():
         diagnostics['VEshear'].append(VE_shear)
         diagnostics['Er'].append(Er)
         diagnostics['p'].append((elc_temp + ion_temp) * elc_dens)
+        diagnostics['Qpara'].append(qpara_elc + qpara_ion)
 
         # Transpose the following data to make it easier to do turbulence statistics
         VEx2dTot.append(VE_x.T)
@@ -81,6 +93,7 @@ def main():
     ionDensAve = utils.func_time_ave(diagnostics['ionDens'])
     ionTempAve = utils.func_time_ave(diagnostics['ionTemp'])
     phiAve = utils.func_time_ave(diagnostics['phi'])
+    qparaAve = utils.func_time_ave(diagnostics['Qpara'])
 
     elcDens2dTot = np.array(elcDens2dTot)
     elcTemp2dTot = np.array(elcTemp2dTot)
