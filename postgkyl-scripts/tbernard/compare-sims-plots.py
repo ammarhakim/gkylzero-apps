@@ -21,7 +21,7 @@ def load_hdf5_field(filepath, field):
     with h5py.File(filepath, 'r') as f:
         return f['x_vals'][:], f[field][:]
 
-def plot_fields(files, labels, fields, lcfs_shift, output_name, slice_from=0, show=False):
+def plot_fields(files, labels, fields, lcfs_shift, output_name, slice_from=0, end_idx=None, show=False):
     x_vals = []
     data = []
 
@@ -41,8 +41,8 @@ def plot_fields(files, labels, fields, lcfs_shift, output_name, slice_from=0, sh
         ax = axs[i]
         for f, label, x in zip(files, labels, x_vals):
             _, y = load_hdf5_field(f, field)
-            y = y[slice_from:]
-            ax.plot(x[slice_from:], y, label=label, linewidth=2)
+            y = y[slice_from:end_idx]
+            ax.plot(x[slice_from:end_idx], y, label=label, linewidth=2)
         ax.axvline(x=0, color='gray', linestyle='--')
         ax.set_title(default_title)
         ax.set_xlabel(r'$R - R_{LCFS}$ (m)')
@@ -74,6 +74,7 @@ def main():
     parser.add_argument("--output", default="comparison.pdf", help="Output filename for the plot")
     parser.add_argument("--lcfs", type=float, default=0.10, help="LCFS radial shift")
     parser.add_argument("--slice_from", type=int, default=0, help="Index to slice x and y arrays from")
+    parser.add_argument("--end_idx", type=int, default=None)
     parser.add_argument("--show", action="store_true", help="Display plot interactively")
     parser.add_argument("--list_fields", action="store_true", help="List available fields and exit")
     args = parser.parse_args()
@@ -95,7 +96,7 @@ def main():
     else:
         raise ValueError("You must specify either --fields or --all_fields.")
 
-    plot_fields(args.files, args.labels, selected_fields, args.lcfs, args.output, args.slice_from, args.show)
+    plot_fields(args.files, args.labels, selected_fields, args.lcfs, args.output, args.slice_from, args.end_idx, args.show)
 
 if __name__ == "__main__":
     main()

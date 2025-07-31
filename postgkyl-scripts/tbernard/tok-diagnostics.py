@@ -25,12 +25,8 @@ def main():
 
     bmag_data = pg.GData(f"{file_prefix}-bmag.gkyl")
     _, y_vals, bmag_2d = utils.func_data_2d(bmag_data, 0, z_idx)
-    bi_data = pg.GData(f"{file_prefix}-b_i.gkyl")
-    _, _, bx = utils.func_data_2d(bi_data, 0, z_idx)
-    _, _, by = utils.func_data_2d(bi_data, 1, z_idx)
-    _, _, bz = utils.func_data_2d(bi_data, 2, z_idx)
+    b_i_data = pg.GData(f"{file_prefix}-b_i.gkyl")
     jacgeo_data = pg.GData(f"{file_prefix}-jacobgeo.gkyl")
-    _, _, jacgeo = utils.func_data_2d(jacgeo_data, 0, z_idx)
 
     diag_names = ['phi', 'elcDens', 'ionDens', 'elcTemp', 'ionTemp', 'VEy', 'VEshear', 'p', 'Er', 'Qpara']
     diagnostics = {name: [] for name in diag_names}
@@ -56,7 +52,7 @@ def main():
         ion_temp = (ion_Tpar + 2 * ion_Tperp) / 3 * mi / eV
 
         x_vals, phi_vals = utils.func_data_yave(phi_data, 0, z_idx)
-        VE_x, VE_y, VE_shear, Er = utils.func_calc_VE(phi_data, bmag_2d, z_idx)
+        VE_x, VE_y, VE_shear, Er = utils.func_calc_VE(phi_data, b_i_data, jacgeo_data, bmag_data, z_idx)
 
         _ , qpara_ion = utils.func_data_yave(ion_qpara_data, 0, -1)
         _, qpara_elc = utils.func_data_yave(elc_qpara_data, 0, -1)

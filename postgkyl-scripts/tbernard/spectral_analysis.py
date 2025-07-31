@@ -3,8 +3,6 @@
 # A script to perform binormal wavenumber (k_y) spectra analysis on Gkeyll
 # simulation data using raw, cell-averaged values.
 #
-# It includes a "--plot-file" option to skip analysis and visualize results
-# from a previously generated HDF5 file.
 #
 import os
 import argparse
@@ -56,8 +54,7 @@ def save_spectra_to_hdf5(filename, ky_axis, spectra_data, metadata):
         f.create_dataset('ky_binormal', data=ky_axis)
         for name, spectrum in spectra_data.items():
             f.create_dataset(name, data=spectrum)
-        for key, value in metadata.items():
-            f.attrs[key] = value
+        for key, value in metadata.items(): f.attrs[key] = value
         print(f"Successfully saved spectra to {filename}")
 
 def plot_spectra(ky_axis, spectra_data, fstart, fend, z_str, is_cell_avg=True):
@@ -87,41 +84,6 @@ def plot_spectra(ky_axis, spectra_data, fstart, fend, z_str, is_cell_avg=True):
     print(f"Saved plot to {output_filename}")
     plt.show()
 
-# --- Function for Visualization Mode ---
-def visualize_from_file(filepath):
-    """Loads and plots spectra data from a specified HDF5 file."""
-    print(f"--- Entering Plot-Only Mode ---\nLoading data from: {filepath}")
-    
-    try:
-        with h5py.File(filepath, 'r') as f:
-            # Load the wavenumber axis
-            if 'ky_binormal' not in f:
-                raise KeyError("'ky_binormal' dataset not found in HDF5 file.")
-            ky_axis = f['ky_binormal'][:]
-            
-            # Load metadata from attributes
-            fstart = f.attrs.get('fstart', 'N/A')
-            fend = f.attrs.get('fend', 'N/A')
-            z_str = f.attrs.get('z_str', 'N/A')
-            
-            # Load all other datasets, assuming they are spectra
-            spectra_data = {}
-            for key in f.keys():
-                if key != 'ky_binormal':
-                    spectra_data[key] = f[key][:]
-                    
-            if not spectra_data:
-                print("Error: No spectra data found in the HDF5 file.")
-                return
-
-            # Call the plotting function with the loaded data
-            plot_spectra(ky_axis, spectra_data, fstart, fend, z_str)
-
-    except FileNotFoundError:
-        print(f"Error: The file '{filepath}' was not found.")
-    except Exception as e:
-        print(f"An error occurred while loading or plotting the HDF5 file: {e}")
-
 # === Main Execution Block ===
 def main():
     parser = argparse.ArgumentParser(
@@ -143,18 +105,13 @@ def main():
 
     args = parser.parse_args()
 
-    # --- Mode Logic ---
-    if args.plot_file:
-        # If --plot-file is given, enter visualization mode
-        visualize_from_file(args.plot_file)
-    else:
-        # Otherwise, enter analysis mode
-        # Check for required arguments in this mode
-        if args.fstart is None or args.fend is None:
-            parser.error("--fstart and --fend are required for analysis mode.")
-        
-        print("--- Entering Analysis Mode ---")
-        run_analysis(args)
+    # Otherwise, enter analysis mode
+    # Check for required arguments in this mode
+    if args.fstart is None or args.fend is None:
+        parser.error("--fstart and --fend are required for analysis mode.")
+    
+    print("--- Entering Analysis Mode ---")
+    run_analysis(args)
 
 def run_analysis(args):
     """The main analysis workflow, called when not in plot-only mode."""
@@ -164,7 +121,7 @@ def run_analysis(args):
     except FileNotFoundError as e:
         print(e), exit()
 
-    quantities_to_analyze = ['phi', 'elcDens', 'elcTemp']
+    quantities_to_analyze = ['phi', 'elcDens', 'elcTemp', 'ionDens', 'ionTemp']
     spectra_time_series = {name: [] for name in quantities_to_analyze}
 
     try:
@@ -182,6 +139,7 @@ def run_analysis(args):
         print(f"Processing frame {tf}...")
         try:
             elc_data = pg.GData(f"{file_prefix}-elc_BiMaxwellianMoments_{tf}.gkyl")
+            ion_data = pg.GData(f"{file_prefix}-ion_BiMaxwellianMoments_{tf}.gkyl")
             phi_data = pg.GData(f"{file_prefix}-field_{tf}.gkyl")
         except Exception as e:
             print(f"Warning: Could not load data for frame {tf}. Skipping. Error: {e}")
@@ -189,12 +147,18 @@ def run_analysis(args):
 
         phi_2d_cellave = get_cell_avg_2d(phi_data, 0, z_idx)
         elc_dens_2d_cellave = get_cell_avg_2d(elc_data, 0, z_idx)
+        ion_dens_2d_cellave = get_cell_avg_2d(ion_data, 0, z_idx)
         
         elc_Tpar_2d_cellave = get_cell_avg_2d(elc_data, 2, z_idx)
         elc_Tperp_2d_cellave = get_cell_avg_2d(elc_data, 3, z_idx)
         elc_temp_2d_cellave = (elc_Tpar_2d_cellave + 2 * elc_Tperp_2d_cellave) / 3.0
 
-        data_map = {'phi': phi_2d_cellave, 'elcDens': elc_dens_2d_cellave, 'elcTemp': elc_temp_2d_cellave}
+        ion_Tpar_2d_cellave = get_cell_avg_2d(ion_data, 2, z_idx)
+        ion_Tperp_2d_cellave = get_cell_avg_2d(ion_data, 3, z_idx)
+        ion_temp_2d_cellave = (ion_Tpar_2d_cellave + 2 * ion_Tperp_2d_cellave) / 3.0
+
+        data_map = {'phi': phi_2d_cellave, 'elcDens': elc_dens_2d_cellave, 'elcTemp': elc_temp_2d_cellave,
+                    'ionDens': ion_dens_2d_cellave, 'ionTemp': ion_temp_2d_cellave}
         
         for name in quantities_to_analyze:
             spectrum = calculate_ky_spectrum(data_map[name])
