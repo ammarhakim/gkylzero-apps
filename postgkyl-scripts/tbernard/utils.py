@@ -79,10 +79,38 @@ def func_calc_VE(phi_data, b_i_data, jac_data, bmag_data, z_idx):
     VE_y = (b_z*dphi_dx - b_x*dphi_dz)/bmag
     VE_shear = np.gradient(VE_y, dx, axis=0)
     VE_x = VE_x[:, :, z_slice] # return 2d
-    VE_y = np.mean(VE_y[:, :, z_slice], axis=1)
+    VE_y = VE_y[:, :, z_slice]
+    VE_y_1d = np.mean(VE_y, axis=1)
     VE_shear = np.mean(VE_shear[:, :, z_slice], axis=1)
     Ex = np.mean(Ex[:, :, z_slice], axis=1)
-    return VE_x, VE_y, VE_shear, Ex
+    return VE_x, VE_y, VE_y_1d, VE_shear, Ex
+
+def func_calc_reynolds_stress(phi_data, b_i_data, jac_data, bmag_data, z_idx):
+    grid, phi = interpolate_field(phi_data, 0)
+    _, b_x = interpolate_field(b_i_data, 0)
+    _, b_y = interpolate_field(b_i_data, 1)
+    _, b_z = interpolate_field(b_i_data, 2)
+    _, jac = interpolate_field(jac_data, 0)
+    _, bmag = interpolate_field(bmag_data, 0)
+    CCC = get_center_coords(grid)
+    x_vals, y_vals, z_vals = CCC
+    z_slice = get_slice_index(z_vals, z_idx)
+    phi = phi[:, :, :, 0]
+    b_x = b_x[:, :, :, 0]
+    b_y = b_y[:, :, :, 0]
+    b_z = b_z[:, :, :, 0]
+    jac = jac[:, :, :, 0]
+    bmag = bmag[:, :, :, 0]
+    dx, dy, dz = x_vals[1] - x_vals[0], y_vals[1] - y_vals[0], z_vals[1] - z_vals[0]
+    dphi_dx = np.gradient(phi, dx, axis=0)/jac
+    dphi_dy = np.gradient(phi, dy, axis=1)/jac
+    dphi_dz = np.gradient(phi, dz, axis=2)/jac
+    VE_x = (b_y*dphi_dz - b_z*dphi_dy)/bmag
+    VE_y = (b_z*dphi_dx - b_x*dphi_dz)/bmag
+    VE_x_fluc = VE_x - np.mean(VE_x, axis=(1), keepdims=True)
+    VE_y_fluc = VE_y - np.mean(VE_y, axis=(1), keepdims=True)
+    RS_xy = np.mean(VE_x_fluc*VE_y_fluc, axis=(1))
+    return RS_xy
 
 def func_time_ave(data_list):
     return np.mean(np.array(data_list), axis=0)

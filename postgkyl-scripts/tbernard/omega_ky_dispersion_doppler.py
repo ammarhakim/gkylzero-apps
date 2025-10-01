@@ -180,7 +180,7 @@ def calculate_doppler_velocity(prefix, fstart, fend, x_idx, z_idx):
         phi = get_cell_avg_3d(phi_data, 0)
         dphi_dx = np.gradient(phi, dx, axis=0)
         dphi_dz = np.gradient(phi, dz, axis=2)
-        VE_y = (b_z*dphi_dx)/bmag/jacgeo # - b_x*dphi_dz)/bmag/jacgeo
+        VE_y = (b_z*dphi_dx - b_x*dphi_dz)/bmag/jacgeo
         VE_y_cart = dphi_dx/bmag
         if tf == fstart:
             plt.plot(x_vals, np.mean(VE_y[:,:,z_idx],axis=1),label='curv')
