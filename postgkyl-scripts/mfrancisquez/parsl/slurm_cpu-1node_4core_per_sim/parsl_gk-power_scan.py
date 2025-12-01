@@ -4,8 +4,11 @@
 #[ using the parsl library.
 #[
 #[ Assumes this script is run from a directory that holds
-#[ the Gkeyll executable. It creates a folder for each Gkeyll
-#[ simulation to be run.
+#[ the Gkeyll executable. It creates a folder for each
+#[ Gkeyll simulation to be run.
+#[
+#[ This runs each simulation on a 4 CPU cores within a
+#[ single-node Slurm job.
 #[
 #[ Manaure Francisquez.
 #[ November 2025.
@@ -15,7 +18,13 @@
 #[ Parsl library modules.
 import parsl
 from parsl.app.app import python_app, bash_app
-from parsl.configs.local_threads import config
+from parsl.config import Config
+from parsl.providers import LocalProvider
+from parsl.launchers import SrunLauncher
+from parsl.launchers import SrunMPILauncher
+from parsl.launchers import SingleNodeLauncher
+from parsl.executors import HighThroughputExecutor
+from parsl.addresses import address_by_interface
 #[ File navigation/management modules.
 import os
 from os import path
@@ -25,7 +34,7 @@ gk_exec_name = "gk_sheath_2x2v_p1" #[ Simulation and executable name.
 gk_exec_dir = os.getcwd() #[ Directory where Gkeyll executable is and where Parsl is launched from.
 
 #[ Array of desired input powers.
-input_power = [3.5e6+i*0.5e6 for i in range(2)]
+input_power = [1.5e6+i*0.5e6 for i in range(32)]
 
 #[ Each Gkeyll run will store its result in the folder
 #[ names gk_exec_name-par#i$ where # is the parameter number (in case
@@ -33,6 +42,11 @@ input_power = [3.5e6+i*0.5e6 for i in range(2)]
 #[ $ is the index of the value of that parameter (e.g. here it'll
 #[ run from 0 to len(input_power)-1).
 run_folder_suffix = "par%di%d"
+
+#[ SLURM parameters (it should be possible to query SLURM from Python, but haven't figured out how yet).
+num_nodes = 1
+cores_per_sim = 4
+cores_per_node = 256 #[ Perlmutter CPU nodes have 128 cores per node with 2 threads each.
 
 #[ ............... END OF USER INPUTS (maybe) ................ ]#
 
@@ -49,15 +63,39 @@ def check_mkdir(dirIn):
 num_sims = len(input_power) #[ Number of simulations to run.
 gk_exec_dir = gk_exec_dir + '/' #[ Added for safety.
 gk_exec = gk_exec_dir + gk_exec_name #[ Gkeyll executable.
+cpus_per_task = int(cores_per_node/num_sims) #[ Perlmutter's -c argument.
 
 #[ Create parsl configuration.
+config = Config(
+  executors = [
+    HighThroughputExecutor(
+      label = 'perlmuter_HTEX',
+      cores_per_worker = cpus_per_task,
+      provider = LocalProvider(
+        nodes_per_block = num_nodes,
+        launcher = SingleNodeLauncher(),
+        init_blocks = 1,
+        max_blocks = 1,
+      ),
+    )
+  ],
+  strategy = None,
+)
 parsl.load(config)
 
 @bash_app
-def gk_sim(stdout=(gk_exec_name+".out", "w"), stderr=(gk_exec_name+".err", "w"), sim_dir='./', power=4.5e6):
-  #[ Command to run Gkeyll (as a string).
+def gk_sim(stdout = (gk_exec_name+".out", "w"), stderr = (gk_exec_name+".err", "w"),
+           sim_dir='./', exec_full_path = './'+gk_exec_name,
+           nodes_per_sim = 1, ranks_per_sim = 1, cpus_per_task = 1,
+           power = 4.5e6):
+  #[ Go to directory for this sim.
+  import os
   os.chdir(sim_dir)
-  gk_cmd = gk_exec + " -o Pin=" + str(power)
+
+  #[ Command to run Gkeyll (as a string).
+  gk_cmd = 'srun -N ' + str(nodes_per_sim) + ' -n ' + str(ranks_per_sim) + \
+    ' -c '+str(cpus_per_task) + ' --cpu_bind=cores --overlap ' + \
+    exec_full_path + " -M -d " + str(ranks_per_sim) + " -o Pin=" + str(power)
   return gk_cmd
 
 #[ Run Gkeyll for each input parameter.
@@ -69,16 +107,19 @@ for i in range(num_sims):
   gk_sim_dir = gk_exec + "-" + run_folder_suffix % (0,i) + "/"
   check_mkdir(gk_sim_dir)
 
-  gk_status[i] = gk_sim(sim_dir = gk_sim_dir, power = pin)
+  #[ Run sim.
+  gk_status[i] = gk_sim(
+    sim_dir = gk_sim_dir,
+    exec_full_path = gk_exec,
+    nodes_per_sim = num_nodes,
+    ranks_per_sim = cores_per_sim,
+    cpus_per_task = cpus_per_task,
+    power = pin
+  )
 
 #[ Wait for completion of all sims.
-gk_sims_done = True
-while gk_sims_done:
-  all_done = True
-  for i in range(num_sims):
-    all_done = all_done and gk_status[i].done()
-
-  gk_sims_done = all_done
+for i in range(num_sims):
+  gk_status[i].result()
 
 #[ Terminate parsl.
 parsl.clear()
