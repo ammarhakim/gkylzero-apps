@@ -63,20 +63,21 @@ frame = sys.argv[1] # frame is always used as string here.
 prefix = utils.find_prefix('-mapc2p.gkyl', '.')
 
 # Create degas-inp dir if it doesn't exist yet.
-os.makedirs("degas-inp", exist_ok=True)
+# os.makedirs("degas-inp", exist_ok=True)
 
 # Load nodes data.
 data = pg.GData(prefix+"-nodes.gkyl")
 node_vals = data.get_values()
-X = node_vals[:,0,:,0]
-Y = node_vals[:,0,:,1]
-Z = node_vals[:,0,:,2]
-R = np.sqrt(X**2 + Y**2)
+R = node_vals[:,0,:,0]
+Z = node_vals[:,0,:,1]
+phi = node_vals[:,0,:,2]
+print(np.shape(R))
+#R = np.sqrt(X**2 + Y**2)
 
-xCart = X.flatten()
-yCart = Y.flatten()
-zCart = Z.flatten()
-R = np.sqrt(np.square(X) + np.square(Y))
+# xCart = X.flatten()
+# yCart = Y.flatten()
+# zCart = Z.flatten()
+# R = np.sqrt(np.square(X) + np.square(Y))
 fig = plt.figure(figsize=(5,6))
 plt.plot(R,Z,marker=".", color="k", linestyle="none")
 plt.scatter(R,Z, marker=".")
@@ -84,10 +85,12 @@ segs1 = np.stack((R,Z), axis=2)
 segs2 = segs1.transpose(1,0,2)
 plt.gca().add_collection(LineCollection(segs1))
 plt.gca().add_collection(LineCollection(segs2))
-plt.gca().set_aspect('equal')
+#plt.gca().set_aspect('equal')
 plt.grid()
 plt.savefig("plot-"+prefix+"-grid.png", dpi=300)
 plt.show()
+
+exit()
 
 # Step 1: Build list of nodes
 nodes = np.column_stack((R.flatten(), Z.flatten()))  # (N, 2)
