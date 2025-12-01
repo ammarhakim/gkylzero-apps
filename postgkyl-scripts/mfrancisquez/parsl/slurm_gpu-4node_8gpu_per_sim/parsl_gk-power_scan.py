@@ -46,7 +46,7 @@ input_power = [3.5e6+i*0.5e6 for i in range(2)]
 run_folder_suffix = "par%di%d"
 
 #[ SLURM parameters (it should be possible to query SLURM from Python, but haven't figured out how yet).
-gpus_per_sim = 4
+gpus_per_sim = 8
 
 #[ ............... END OF USER INPUTS (maybe) ................ ]#
 
