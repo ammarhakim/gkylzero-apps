@@ -20,6 +20,7 @@ def main():
 
     fstart = int(input("fstart? "))
     fend = int(input("fend? "))
+    step = int(input("step? "))
     z_idx = 1
     z_str = 'zmid'
 
@@ -31,9 +32,9 @@ def main():
     diag_names = ['phi', 'elcDens', 'ionDens', 'elcTemp', 'ionTemp', 'VEy', 'VEshear', 'p', 'Er', 'Qpara']
     diagnostics = {name: [] for name in diag_names}
     elcDens2dTot, elcTemp2dTot, ionTemp2dTot, phi2dTot = [], [], [], []
-    VEx2dTot = []
+    VEx2dTot, VEy2dTot = [], []
 
-    for tf in range(fstart, fend + 1):
+    for tf in range(fstart, fend + 1, step):
         elc_data = pg.data.GData(f"{file_prefix}-elc_BiMaxwellianMoments_{tf}.gkyl")
         ion_data = pg.data.GData(f"{file_prefix}-ion_BiMaxwellianMoments_{tf}.gkyl")
         phi_data = pg.data.GData(f"{file_prefix}-field_{tf}.gkyl")
@@ -52,7 +53,7 @@ def main():
         ion_temp = (ion_Tpar + 2 * ion_Tperp) / 3 * mi / eV
 
         x_vals, phi_vals = utils.func_data_yave(phi_data, 0, z_idx)
-        VE_x, VE_y, VE_shear, Er = utils.func_calc_VE(phi_data, b_i_data, jacgeo_data, bmag_data, z_idx)
+        VE_x, VE_y, VE_y_1d, VE_shear, Er = utils.func_calc_VE(phi_data, b_i_data, jacgeo_data, bmag_data, z_idx)
 
         _ , qpara_ion = utils.func_data_yave(ion_qpara_data, 0, -1)
         _, qpara_elc = utils.func_data_yave(elc_qpara_data, 0, -1)
@@ -62,7 +63,7 @@ def main():
         diagnostics['elcTemp'].append(elc_temp)
         diagnostics['ionTemp'].append(ion_temp)
         diagnostics['phi'].append(phi_vals)
-        diagnostics['VEy'].append(VE_y)
+        diagnostics['VEy'].append(VE_y_1d)
         diagnostics['VEshear'].append(VE_shear)
         diagnostics['Er'].append(Er)
         diagnostics['p'].append((elc_temp + ion_temp) * elc_dens)
@@ -70,6 +71,7 @@ def main():
 
         # Transpose the following data to make it easier to do turbulence statistics
         VEx2dTot.append(VE_x.T)
+        VEy2dTot.append(VE_y.T)
 
         _, _, elc_dens2d = utils.func_data_2d(elc_data, 0, z_idx)
         elcDens2dTot.append(elc_dens2d.T)
@@ -96,13 +98,16 @@ def main():
     ionTemp2dTot = np.array(ionTemp2dTot)
     phi2dTot = np.array(phi2dTot)
     VEx2dTot = np.array(VEx2dTot)
+    VEy2dTot = np.array(VEy2dTot)
 
     nAve2d = np.mean(elcDens2dTot, axis=(0, 1), keepdims=True)
     TeAve2d = np.mean(elcTemp2dTot, axis=(0, 1), keepdims=True)
     TiAve2d = np.mean(ionTemp2dTot, axis=(0, 1), keepdims=True)
     VExAve2d = np.mean(VEx2dTot, axis=(0, 1), keepdims=True)
+    VEyAve2d = np.mean(VEy2dTot, axis=(0, 1), keepdims=True)
 
     dVEx = VEx2dTot - VExAve2d
+    dVEy = VEy2dTot - VEyAve2d
     dnGr = elcDens2dTot - nAve2d
     dTeQr = elcTemp2dTot - TeAve2d
     dTiQr = ionTemp2dTot - TiAve2d
@@ -110,6 +115,8 @@ def main():
     Gx = np.mean(dnGr * dVEx, axis=(0, 1))
     Qxe = elcDensAve * np.mean(dTeQr * dVEx, axis=(0, 1)) + Gx * elcTempAve
     Qxi = ionDensAve * np.mean(dTiQr * dVEx, axis=(0, 1)) + Gx * ionTempAve
+    reynolds_stress = np.mean(dVEx * dVEy, axis=(0, 1))
+    reynolds_force = -np.gradient(reynolds_stress, x_vals)
 
     dn, dn_norm = utils.func_calc_norm_fluc(elcDens2dTot, elcDensAve, elcDensAve, Nt, Ny, Nx)
     dT, dT_norm = utils.func_calc_norm_fluc(elcTemp2dTot, elcTempAve, elcTempAve, Nt, Ny, Nx)
@@ -149,7 +156,8 @@ def main():
         l_rad_err.append(coeffs[1])
 
     averaged = {name + "Ave": utils.func_time_ave(data) for name, data in diagnostics.items()}
-    all_results = {**averaged, "Gx": Gx, "Qxe": Qxe, "Qxi": Qxi,
+    all_results = {**averaged, "Gx": Gx, "Qxe": Qxe, "Qxi": Qxi, 
+                   "reynolds_stress": reynolds_stress, "reynolds_force": reynolds_force,
                    "dn_norm": dn_norm, "dT_norm": dT_norm, "dphi_norm": dphi_norm,
                    "skew": skew, "kurt": kurt, "l_rad": l_rad, "l_rad_err": l_rad_err,
                    "xVals_new": xVals_new}

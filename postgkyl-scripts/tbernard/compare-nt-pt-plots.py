@@ -1,16 +1,40 @@
 import h5py
 import matplotlib.pyplot as plt
+import matplotlib as mpl
 import numpy as np
 import argparse
 import os
 
+mpl.rcParams.update({
+    #"font.family": "serif",
+    "font.size": 18,              # Default text size
+    "axes.titlesize": 20,         # Subplot title size
+    "axes.labelsize": 20,         # X and Y axis label size
+    "xtick.labelsize": 16,        # X tick label size
+    "ytick.labelsize": 16,        # Y tick label size
+    "legend.fontsize": 16,        # Legend text size
+    "figure.titlesize": 22,       # Main figure suptitle size
+    "image.cmap": 'viridis',
+    #"text.usetex": False,
+})
+
 # Fields to plot and their labels
-fields = ['elcDensAve', 'elcTempAve', 'ionTempAve', 'phiAve', 'ErAve', 'VEshearAve', 'dn_norm', 'dT_norm', 'dphi_norm']
-units = ['m$^{-3}$', 'eV', 'eV', 'V', 'kV/m', '1/s', '', '', '']
+fields = [
+    'elcDensAve', 'elcTempAve', 'ionTempAve', 
+    'phiAve', 'ErAve', 'VEshearAve', 
+    'dn_norm', 'dT_norm', 'dphi_norm',
+    'reynolds_stress', 'reynolds_force'
+]
+units = [
+    'm$^{-3}$', 'eV', 'eV', 'V', 'kV/m', '1/s', '', '', '',
+    r'm$^2$/s$^2$', r'm/s$^2$'  
+]
 titles = [
-    r'a) $n_e$', r'b) $T_e$', r'c) $T_i$', r'a) $\phi$', r'b) $E_r$', r'c) $|\gamma_E|$',
+    r'a) $n_e$', r'b) $T_e$', r'c) $T_i$', 
+    r'a) $\phi$', r'b) $E_r$', r'c) $|\gamma_E|$',
     r'a) $\tilde{n}_{rms}/\langle{n}\rangle$', r'b) $\tilde{T}_{e,rms}/\langle{T_e}\rangle$',
-    r'c) $e\tilde{\phi}_{rms}/\langle{T_e}\rangle$'
+    r'c) $e\tilde{\phi}_{rms}/\langle{T_e}\rangle$',
+    r'a) Reynolds Stress', r'b) Reynolds Force'
 ]
 
 def load_hdf5_field(filepath, field, xstart_idx=0, xend_idx=None):
@@ -180,6 +204,116 @@ def plot_fluxes(file_posD, file_negD, lcfs_shift, show):
     else:
         plt.close()
 
+def plot_reynolds_stress(file_posD, file_negD, lcfs_shift, show):
+    """
+    Loads and plots the Reynolds stress and Reynolds force from HDF5 files.
+    """
+    x_idx = 10  # Define the starting index for plotting
+
+    # --- Load Data ---
+    x_pos, stress_pos = load_hdf5_field(file_posD, 'reynolds_stress', x_idx)
+    x_neg, stress_neg = load_hdf5_field(file_negD, 'reynolds_stress', x_idx)
+    
+    _, force_pos = load_hdf5_field(file_posD, 'reynolds_force', x_idx)
+    _, force_neg = load_hdf5_field(file_negD, 'reynolds_force', x_idx)
+
+    # Shift x-axis to be relative to the LCFS
+    x_pos -= lcfs_shift
+    x_neg -= lcfs_shift
+    
+    # --- Create Plot ---
+    fig, axs = plt.subplots(1, 2, figsize=(10, 4), sharex=True)
+    
+    # Panel a) Reynolds Stress
+    ax = axs[0]
+    ax.plot(x_pos, stress_pos, label='PT', color='red', linewidth=2)
+    ax.plot(x_neg, stress_neg, label='NT', color='blue', linewidth=2)
+    ax.axvline(x=0, color='gray', linestyle='--')
+    ax.axhline(y=0, color='black', linestyle=':', alpha=0.7)
+    ax.set_title(titles[9]) # 'a) Reynolds Stress'
+    ax.set_xlabel(r'$R - R_{LCFS}$ (m)')
+    ax.set_ylabel(r'$\langle \delta v_r \delta v_y \rangle$ (' + units[9] + ')')
+    ax.legend()
+    
+    # Panel b) Reynolds Force
+    ax = axs[1]
+    ax.plot(x_pos, force_pos, label='PT', color='red', linewidth=2)
+    ax.plot(x_neg, force_neg, label='NT', color='blue', linewidth=2)
+    ax.axvline(x=0, color='gray', linestyle='--')
+    ax.axhline(y=0, color='black', linestyle=':', alpha=0.7)
+    ax.set_title(titles[10]) # 'b) Reynolds Force'
+    ax.set_xlabel(r'$R - R_{LCFS}$ (m)')
+    ax.set_ylabel(r'$-\nabla_r \langle \delta v_r \delta v_y \rangle$ (' + units[10] + ')')
+    ax.legend()
+    
+    plt.tight_layout()
+    plt.savefig('reynolds_stress_from_hdf5.pdf')
+    if show:
+        plt.show()
+    else:
+        plt.close()
+
+def plot_reynolds_and_shear(file_posD, file_negD, lcfs_shift, show):
+    """
+    Loads and plots the Reynolds stress and Reynolds force from HDF5 files.
+    """
+    x_idx = 10  # Define the starting index for plotting
+
+    # --- Load Data ---
+    x_pos, stress_pos = load_hdf5_field(file_posD, 'reynolds_stress', x_idx)
+    x_neg, stress_neg = load_hdf5_field(file_negD, 'reynolds_stress', x_idx)
+    
+    _, Er = load_hdf5_field(file_posD, 'ErAve', x_idx)
+    _, Er_neg = load_hdf5_field(file_negD, 'ErAve', x_idx)
+    _, VEshear_pos = load_hdf5_field(file_posD, 'VEshearAve', x_idx)
+    _, VEshear_neg = load_hdf5_field(file_negD, 'VEshearAve', x_idx)
+
+    # Shift x-axis to be relative to the LCFS
+    x_pos -= lcfs_shift
+    x_neg -= lcfs_shift
+    
+    # --- Create Plot ---
+    fig, axs = plt.subplots(1, 3, figsize=(14, 4), sharex=True)
+    
+    # Panel a) Reynolds Stress
+    ax = axs[0]
+    ax.plot(x_pos, stress_pos, label='PT', color='red', linewidth=2)
+    ax.plot(x_neg, stress_neg, label='NT', color='blue', linewidth=2)
+    ax.axvline(x=0, color='gray', linestyle='--')
+    ax.axhline(y=0, color='black', linestyle=':', alpha=0.7)
+    ax.set_title(titles[9]) # 'a) Reynolds Stress'
+    ax.set_xlabel(r'$R - R_{LCFS}$ (m)')
+    ax.set_ylabel(r'$\langle \delta v_r \delta v_y \rangle$ (' + units[9] + ')')
+    ax.legend()
+
+    # Panel b) Er
+    ax = axs[1]
+    ax.plot(x_pos, Er/1e3, label='PT', color='red', linewidth=2)
+    ax.plot(x_neg, Er_neg/1e3, label='NT', color='blue', linewidth=2)
+    ax.axvline(x=0, color='gray', linestyle='--')
+    ax.axhline(y=0, color='black', linestyle=':', alpha=0.7)
+    ax.set_title(titles[4]) # 'b) $E_r$'
+    ax.set_xlabel(r'$R - R_{LCFS}$ (m)')
+    ax.set_ylabel(units[4])
+    ax.legend() 
+
+    # Panel c) VEshear
+    ax = axs[2]
+    ax.plot(x_pos, np.abs(VEshear_pos), label='PT', color='red', linewidth=2)
+    ax.plot(x_neg, np.abs(VEshear_neg), label='NT', color='blue', linewidth=2)
+    ax.axvline(x=0, color='gray', linestyle='--')
+    ax.axhline(y=0, color='black', linestyle=':', alpha=0.7)
+    ax.set_title(titles[5]) # 'c) $|\gamma_E|$'
+    ax.set_xlabel(r'$R - R_{LCFS}$ (m)')
+    ax.set_ylabel(units[5])
+    ax.legend()
+    
+    plt.tight_layout()
+    plt.savefig('reynolds_and_shear_from_hdf5.pdf')
+    if show:
+        plt.show()
+    else:
+        plt.close()
 
 def main():
     parser = argparse.ArgumentParser(description="Compare diagnostics from two HDF5 simulations.")
@@ -193,6 +327,8 @@ def main():
     plot_fluctuations(args.file_posD, args.file_negD, args.lcfs, args.show)
     plot_potential_fields(args.file_posD, args.file_negD, args.lcfs, args.show)
     plot_fluxes(args.file_posD, args.file_negD, args.lcfs, args.show)
+    plot_reynolds_stress(args.file_posD, args.file_negD, args.lcfs, args.show)
+    plot_reynolds_and_shear(args.file_posD, args.file_negD, args.lcfs, args.show)
 
 if __name__ == "__main__":
     main()
