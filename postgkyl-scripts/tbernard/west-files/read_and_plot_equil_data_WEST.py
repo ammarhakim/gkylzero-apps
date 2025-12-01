@@ -90,8 +90,8 @@ def analyze_and_plot(gfile_path, plot_miller, shafranov_param, save_plots, outpu
     print("Generating equilibrium plot...")
     fig1, ax1 = plt.subplots(figsize=(8, 10))
     #levels = np.linspace(psi_RZ.min(), psi_RZ.max(), 20)
-    vmin=0.32
-    vmax=0.38
+    vmin=0.35
+    vmax=0.36
     levels = np.linspace(vmin, vmax, 20)
     contour = ax1.contour(RR, ZZ, psi_RZ, levels=levels)##psi_RZ.min(), vmax=psi_RZ.max()*.75)
     fig1.colorbar(contour, ax=ax1, label=r'$\psi$ (Wb/rad)')
