@@ -1,0 +1,47 @@
+#!/bin/bash -l
+
+#.Declare a name for this job, preferably with 16 or fewer characters.
+#SBATCH -J nstx_P_D_scan
+#SBATCH -A <account number>
+
+#.Request the queue (enter the possible names, if omitted, default is the default)
+#.this job is going to use the default
+#SBATCH -q debug
+
+#.Number of nodes to request (Perlmutter has 64 cores and 4 GPUs per node)
+#SBATCH -N 8
+#SBATCH --ntasks 32
+
+#.Specify GPU needs:
+#SBATCH --constraint gpu
+#SBATCH --gpus 32
+
+#.Request wall time
+#SBATCH -t 00:30:00
+
+#.Mail is sent to you when the job starts and when it terminates or aborts.
+#SBATCH --mail-user=<email>
+#SBATCH --mail-type=END,FAIL,REQUEUE
+
+#.Load modules (this must match those in the machines/configure script).
+module load PrgEnv-gnu/8.5.0
+module load craype-accel-nvidia80
+module load cray-mpich/8.1.28
+module load cudatoolkit/12.4
+module load nccl/2.18.3-cu12
+
+#.Disable CUDA-ware MPI, since it causes problems on Perlmutter and we use NCCL alone.
+export MPICH_GPU_SUPPORT_ENABLED=0
+
+#.On Perlmutter some jobs get warnings about DVS_MAXNODES (used in file stripping).
+#.We set it to 24 for now, but really this depends on the amount/size of I/O being performed.
+#.See online NERSC docs and the intro_mpi man page.
+export DVS_MAXNODES=24_
+export MPICH_MPIIO_DVS_MAXNODES=24
+
+module load conda/Miniforge3-24.7.1-0
+conda activate parslEnv
+
+python parsl_gk-power_D_scan.py
+
+
