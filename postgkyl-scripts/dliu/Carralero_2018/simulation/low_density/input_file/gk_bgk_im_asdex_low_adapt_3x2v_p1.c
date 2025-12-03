@@ -32,6 +32,7 @@ struct gk_app_ctx {
   double energy_srcWALL, particle_srcWALL;
   double floor_srcWALL;
   // Grid parameters
+  char eqdsk_file[128];
   double Lx, Ly, Lz;
   double x_min, x_max, y_min, y_max, z_min, z_max, rho_min, rho_max;
   int num_cell_x, num_cell_y, num_cell_z, num_cell_vpar, num_cell_mu;
@@ -147,18 +148,32 @@ struct gk_app_ctx create_ctx(void)
   double omega_ci = fabs(qi*B0/mi);
   double rho_s = c_s/omega_ci;
 
+  // Location of the numerical equilibrium.
+  char eqdsk_file[128] = "../../../experiment/33341/Equilibria/Low_density/33341_1.775.eqdsk";
+
+  // Get info from eqdsk file.
+  struct gkyl_efit_inp efit_inp = {
+    .rz_poly_order = 2,
+    .flux_poly_order = 1,
+  };
+  memcpy(efit_inp.filepath, eqdsk_file, sizeof(eqdsk_file));
+  struct gkyl_efit *efit = gkyl_efit_new(&efit_inp);
+  double psi_sep = efit->psisep;
+  double Rxpt = efit->Rxpt[0], Zxpt = efit->Zxpt[0];
+  gkyl_efit_release(efit);
+
   // Configuration domain parameters 
   double rho_min = 1.00;
   double rho_max = 1.10;
-  double x_min = 0.080;
-  double x_max = 0.096;
+  double x_min = 0.034;
+  double x_max = 0.050;
   double Lx = x_max - x_min;
 
   double r0 = 0.5;
-  double q0 = 4.0; 
+  double q0 = 4.35; 
   double Ly = 100*rho_s*q0/r0;
   double y_min = -Ly/2.;
-  double y_max = Ly/2.;
+  double y_max =  Ly/2.;
 
   double Lz    = 2.*M_PI-1e-10;       // Domain size along magnetic field.
   double z_min = -Lz/2.;
@@ -252,6 +267,10 @@ struct gk_app_ctx create_ctx(void)
     .dt_failure_tol = dt_failure_tol,
     .num_failures_max = num_failures_max,
   };
+
+  // Copy eqdsk file into ctx.
+  memcpy(ctx.eqdsk_file, eqdsk_file, sizeof(eqdsk_file));
+
   return ctx;
 }
 
@@ -536,10 +555,11 @@ main(int argc, char **argv)
   // Geometry
   struct gkyl_efit_inp efit_inp = {
     // psiRZ and related inputs
-    .filepath = "./gyrokinetic/data/eqdsk/33292_1.800.eqdsk", // equilibrium to use
     .rz_poly_order = 2,                      // polynomial order for psi(R,Z) used for field line tracing
     .flux_poly_order = 1,                    // polynomial order for fpol(psi)
   };
+  // Copy eqdsk file into efit_inp.
+  memcpy(efit_inp.filepath, ctx.eqdsk_file, sizeof(ctx.eqdsk_file));
 
   struct gkyl_tok_geo_grid_inp grid_inp = {
     .ftype = GKYL_LSN_SOL, // Type of geometry.
