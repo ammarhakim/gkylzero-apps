@@ -479,6 +479,12 @@ main(int argc, char **argv)
       .temp = eval_temp_elc,
     },
 
+//    .positivity = {
+//      .type = GKYL_GK_POSITIVITY_SHIFT,
+//      .quasineutrality_rescale = true,
+//      .write_diagnostics = true,
+//    },
+
     .collisionless = {
       .type = GKYL_GK_COLLISIONLESS_ES,
     },
@@ -604,6 +610,12 @@ main(int argc, char **argv)
       .temp = eval_temp_ion,
     },
 
+//    .positivity = {
+//      .type = GKYL_GK_POSITIVITY_SHIFT,
+//      .quasineutrality_rescale = true,
+//      .write_diagnostics = true,
+//    },
+
     .collisionless = {
       .type = GKYL_GK_COLLISIONLESS_ES,
     },
@@ -706,8 +718,6 @@ main(int argc, char **argv)
     .poly_order = ctx.poly_order,
     .basis_type = app_args.basis_type,
     .cfl_frac = 1.0,
-
-    .enforce_positivity = false,
 
     .geometry = {
       .geometry_id = GKYL_TOKAMAK,
