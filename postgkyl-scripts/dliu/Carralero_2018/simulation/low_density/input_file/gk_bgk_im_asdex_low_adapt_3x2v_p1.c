@@ -191,7 +191,7 @@ struct gk_app_ctx create_ctx(void)
   double x_max = 0.0535;
   double Lx = x_max - x_min;
 
-  double r0 = 0.5;
+  double r0 = 0.5*(2.14235+2.17269)-R_axis;
   double q0 = 4.35; 
   double Ly = 100*rho_s*q0/r0;
   double y_min = -Ly/2.;

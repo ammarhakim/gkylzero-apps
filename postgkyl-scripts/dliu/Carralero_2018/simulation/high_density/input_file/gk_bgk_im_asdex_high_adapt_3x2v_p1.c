@@ -15,10 +15,25 @@
 // Define the context of the simulation. This stores global parameters.
 struct gk_app_ctx {
   int cdim, vdim;
-  double B0;
   // Plasma parameters
   int num_species;
-  double me, qe, mi, qi, n0, Te0, Ti0;
+  double me, qe, mi, qi;
+  // Initial conditions.
+  double den_upstream_min; 
+  double den_upstream_max; 
+  double den_floor       ; 
+  double sig_rho_den     ; 
+
+  double Te_upstream_min ; 
+  double Te_upstream_max ; 
+  double Te_floor        ; 
+  double sig_rho_Te      ; 
+
+  double Ti_upstream_min ; 
+  double Ti_upstream_max ; 
+  double Ti_floor        ; 
+  double sig_rho_Ti      ; 
+  double n0, Te0, Ti0, B0; // Reference parameters.
   // Collision parameters
   double nuFrac, nuElc, nuIon;
   // Source parameters
@@ -62,14 +77,20 @@ double psi_rho(double rho, double psi_axis, double psi_sep)
 void eval_density(double t, const double * GKYL_RESTRICT xn, double* GKYL_RESTRICT fout, void *ctx)
 {
   double x = xn[0], z = xn[2];
-  struct gk_app_ctx *app = ctx;
-  double x_min = app->x_min, x_max = app->x_max;
-  double rho_min = app->rho_min, rho_max = app->rho_max;
-  double rho = (x-x_min)/(x_max-x_min)*(rho_max-rho_min) + rho_min;
-  double n0 = app->n0;
-  double floor = 0.1*n0;
 
-  fout[0] = fmax(-2.35e18*tanh(62.0*(rho-rho_min))+2.712e18, floor);
+  struct gk_app_ctx *app = ctx;
+  double psi_axis = app->psi_axis;
+  double psi_sep = app->psi_sep;
+  double rho_min = app->rho_min;
+  double sig_rho_den = app->sig_rho_den;
+  double den_upstream_max = app->den_upstream_max;
+  double den_floor = app->den_floor;
+
+  double rho = rho_psi(x, psi_axis, psi_sep);
+
+  double profile = den_upstream_max * exp(-(rho - rho_min)/sig_rho_den);
+
+  fout[0] = fmax(profile, den_floor);
 }
 
 // Flow initial condition
@@ -84,12 +105,18 @@ void eval_temp_elc(double t, const double * GKYL_RESTRICT xn, double* GKYL_RESTR
 {
   double x = xn[0], z = xn[2];
   struct gk_app_ctx *app = ctx;
-  double eV = GKYL_ELEMENTARY_CHARGE;
-  double x_min = app->x_min, x_max = app->x_max;
-  double rho_min = app->rho_min, rho_max = app->rho_max;
-  double rho = (x-x_min)/(x_max-x_min)*(rho_max-rho_min) + rho_min;
+  double psi_axis = app->psi_axis;
+  double psi_sep = app->psi_sep;
+  double rho_min = app->rho_min;
+  double sig_rho_Te = app->sig_rho_Te;
+  double Te_upstream_max = app->Te_upstream_max;
+  double Te_floor = app->Te_floor;
 
-  fout[0] = (-20.0*tanh(80.0*(rho-rho_min))+28.0) * eV;
+  double rho = rho_psi(x, psi_axis, psi_sep);
+
+  double profile = Te_upstream_max * exp(-(rho - rho_min)/sig_rho_Te);
+
+  fout[0] = fmax(profile, Te_floor);
 }
 
 // Ion temperature initial conditions
@@ -145,9 +172,7 @@ struct gk_app_ctx create_ctx(void)
   int cdim = 3, vdim = 2; // Dimensionality
   // Universal constant parameters.
   double eps0 = GKYL_EPSILON0, eV = GKYL_ELEMENTARY_CHARGE;
-  double mp = GKYL_PROTON_MASS, me = GKYL_ELECTRON_MASS;
-  double qi = eV; // ion charge
-  double qe = -eV; // electron charge
+  double proton_mass = GKYL_PROTON_MASS, electron_mass = GKYL_ELECTRON_MASS;
 
   // Location of the numerical equilibrium.
   char eqdsk_file[128] = "../../../experiment/33341/Equilibria/High_density/33341_3.592.eqdsk";
@@ -166,41 +191,74 @@ struct gk_app_ctx create_ctx(void)
   double Rxpt = efit->Rxpt[0], Zxpt = efit->Zxpt[0];
   gkyl_efit_release(efit);
 
-  // Plasma parameters
-  int num_species = 2;
-  double AMU = 2.01410177811;
-  double mi  = mp*AMU;   // Deuterium ions
-  double Te0 = 28.0*eV;
-  double Ti0 = 135.0*eV;
-  double n0  = 2.7e18;   // [1/m^3]
-  double B0  = 0.5*(3.913808e+00+1.935764e+00);
+  double bmag_min = 1.935764e+00;
+  double bmag_max = 3.913808e+00;
 
-  double vte = sqrt(Te0/me), vti = sqrt(Ti0/mi); // Thermal velocities
+  // The radial extents
+  //  x_min = 0.181
+  //  x_max = 0.201
+  // give 
+  //  R_omp_min = 2.14397
+  //  R_omp_max = 2.17442
+  // so a 3 cm radial box at the OMP.
+  double x_min = 0.181; // Minimum psi of the simulation domain.
+  double x_max = 0.201; // Maximum psi of the simulation domain.
+  double R_omp_min = 2.14397; // Min major radius at the OMP.
+  double R_omp_max = 2.17442; // Max major radius at the OMP.
+
+  double z_min = -(M_PI-1e10);
+  double z_max =   M_PI-1e10;
+
+  double rho_min = rho_psi(x_min, psi_axis, psi_sep);
+  double rho_max = rho_psi(x_max, psi_axis, psi_sep);
+
+  // Species mass and charge.
+  int num_species = 2;
+  double me = electron_mass;
+  double mi = proton_mass*2.01410177811; // Deuterium ions
+  double qi =  eV; // ion charge
+  double qe = -eV; // electron charge
+
+  // Parameters controlling initial conditions.
+  double den_upstream_min = 1.00e19; // [1/m^3]
+  double den_upstream_max = 1.44e19; // [1/m^3]
+  double den_floor = 0.05*den_upstream_max; // Min density in IC.
+  double sig_rho_den = 2.4*(rho_max - rho_min); // Exp delay length in density.
+
+  double Te_upstream_min = 16.0*eV; // [J]
+  double Te_upstream_max = 30.0*eV; // [J]
+  double Te_floor = 0.05*Te_upstream_max; // Min Te in IC.
+  double sig_rho_Te = 1.2*(rho_max - rho_min); // Exp delay length in Te.
+
+  double Ti_upstream_min = 20.0*eV; // [J]
+  double Ti_upstream_max = 125.0*eV; // [J]
+  double Ti_floor = 0.05*Ti_upstream_max; // Min Ti in IC.
+  double sig_rho_Ti = 0.5*(rho_max - rho_min); // Exp delay length in Ti.
+
+  // Reference parameters.
+  double n0  = 0.5*(den_upstream_min+den_upstream_max);
+  double Te0 = 0.5*(Te_upstream_min+Te_upstream_max);
+  double Ti0 = 0.5*(Ti_upstream_min+Ti_upstream_max);
+  double B0  = 0.5*(bmag_min+bmag_max);
+
+  double vte = sqrt(Te0/me);
+  double vti = sqrt(Ti0/mi);
   double c_s = sqrt(Te0/mi);
   double omega_ci = fabs(qi*B0/mi);
   double rho_s = c_s/omega_ci;
 
-  // Configuration domain parameters 
-  double rho_min = 1.00;
-  double rho_max = 1.10;
-  // The limits
-  //  x_min = 0.181
-  //  x_max = 0.201
-  // give a 3 cm radial box at the OMP.
-  double x_min = 0.181;
-  double x_max = 0.201;
-  double Lx = x_max - x_min;
-
-  double r0 = 0.5;
-  double q0 = 4.35; 
+  double q_min = 3.862429e+00; 
+  double q_max = 4.768886e+00; 
+  double q0 = 0.5*(q_min+q_max);
+  double r0 = 0.5*(R_omp_min+R_omp_max)-R_axis;
   double Ly = 100*rho_s*q0/r0;
   double y_min = -Ly/2.;
   double y_max =  Ly/2.;
 
-  double Lz    = 2.*M_PI-1e-10;       // Domain size along magnetic field.
-  double z_min = -Lz/2.;
-  double z_max =  Lz/2.;
+  double Lx = x_max - x_min;
+  double Lz = z_max - z_min;
 
+  // The limits
   // Source parameters
   int num_sources = 2;
   double P_exp = 0.47e6; // P_sol measured [W]
@@ -229,16 +287,18 @@ struct gk_app_ctx create_ctx(void)
 
   // Grid parameters
   int num_cell_x = 32; 
-  int num_cell_y = 32;
-  int num_cell_z = 24;
+  int num_cell_y = 8;
+  int num_cell_z = 96;
   int num_cell_vpar = 16;
   int num_cell_mu = 8;
   int poly_order = 1;
+
   // Velocity box dimensions
   double vpar_max_elc = 6.*vte;
   double mu_max_elc   = me*pow(4*vte,2)/(2*B0);
   double vpar_max_ion = 6.*vti;
   double mu_max_ion   = mi*pow(4*vti,2)/(2*B0);
+
   double final_time = 2.e-3;
   int num_frames = 2000;
   double write_phase_freq = 0.01;
@@ -249,16 +309,28 @@ struct gk_app_ctx create_ctx(void)
   struct gk_app_ctx ctx = {
     .cdim = cdim,
     .vdim = vdim,
-    .B0     = B0    ,
+    .B0       = B0    ,
     .psi_sep  = psi_sep ,
     .psi_axis = psi_axis,
-    .Lx     = Lx    ,
-    .Ly     = Ly    ,
-    .Lz     = Lz    ,
+    .Lx       = Lx    ,
+    .Ly       = Ly    ,
+    .Lz       = Lz    ,
     .x_min = x_min,  .x_max = x_max,
     .y_min = y_min,  .y_max = y_max,
     .z_min = z_min,  .z_max = z_max,
     .rho_min = rho_min,  .rho_max = rho_max,
+    .den_upstream_min = den_upstream_min,
+    .den_upstream_max = den_upstream_max,
+    .den_floor        = den_floor       ,
+    .sig_rho_den      = sig_rho_den     ,
+    .Te_upstream_min  = Te_upstream_min ,
+    .Te_upstream_max  = Te_upstream_max ,
+    .Te_floor         = Te_floor        ,
+    .sig_rho_Te       = sig_rho_Te      ,
+    .Ti_upstream_min  = Ti_upstream_min ,
+    .Ti_upstream_max  = Ti_upstream_max ,
+    .Ti_floor         = Ti_floor        ,
+    .sig_rho_Ti       = sig_rho_Ti      ,
     .num_species = num_species,
     .me = me,  .qe = qe,
     .mi = mi,  .qi = qi,
