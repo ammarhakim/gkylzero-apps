@@ -88,6 +88,10 @@ void eval_density(double t, const double * GKYL_RESTRICT xn, double* GKYL_RESTRI
 
   double rho = rho_psi(x, psi_axis, psi_sep);
 
+  // Use a constant in z profile because in reality this is a semi-detached
+  // case for which the density actually increases towards the divertor plates,
+  // but we don't have the physics for that. The simulation will likely produce
+  // a decreasing density profile towards the plates.
   double profile = den_upstream_max * exp(-(rho - rho_min)/sig_rho_den);
 
   fout[0] = fmax(profile, den_floor);
@@ -104,6 +108,7 @@ eval_upar(double t, const double * GKYL_RESTRICT xn, double* GKYL_RESTRICT fout,
 void eval_temp_elc(double t, const double * GKYL_RESTRICT xn, double* GKYL_RESTRICT fout, void *ctx)
 {
   double x = xn[0], z = xn[2];
+
   struct gk_app_ctx *app = ctx;
   double psi_axis = app->psi_axis;
   double psi_sep = app->psi_sep;
@@ -116,6 +121,10 @@ void eval_temp_elc(double t, const double * GKYL_RESTRICT xn, double* GKYL_RESTR
 
   double profile = Te_upstream_max * exp(-(rho - rho_min)/sig_rho_Te);
 
+  // Multiply by a function that smoothly drops the temperature by 4X towards
+  // the divertor plates.
+  profile *= 0.25+0.75*exp(-0.5*pow(z/(M_PI/1.35),8));
+
   fout[0] = fmax(profile, Te_floor);
 }
 
@@ -123,13 +132,24 @@ void eval_temp_elc(double t, const double * GKYL_RESTRICT xn, double* GKYL_RESTR
 void eval_temp_ion(double t, const double * GKYL_RESTRICT xn, double* GKYL_RESTRICT fout, void *ctx)
 {
   double x = xn[0], z = xn[2];
-  struct gk_app_ctx *app = ctx;
-  double eV = GKYL_ELEMENTARY_CHARGE;
-  double x_min = app->x_min, x_max = app->x_max;
-  double rho_min = app->rho_min, rho_max = app->rho_max;
-  double rho = (x-x_min)/(x_max-x_min)*(rho_max-rho_min) + rho_min;
 
-  fout[0] = (-115.0*tanh(60.0*(rho-rho_min))+135.0) * eV;
+  struct gk_app_ctx *app = ctx;
+  double psi_axis = app->psi_axis;
+  double psi_sep = app->psi_sep;
+  double rho_min = app->rho_min;
+  double sig_rho_Ti = app->sig_rho_Ti;
+  double Ti_upstream_max = app->Ti_upstream_max;
+  double Ti_floor = app->Ti_floor;
+
+  double rho = rho_psi(x, psi_axis, psi_sep);
+
+  double profile = Ti_upstream_max * exp(-(rho - rho_min)/sig_rho_Ti);
+
+  // Multiply by a function that smoothly drops the temperature by 4X towards
+  // the divertor plates.
+  profile *= 0.25+0.75*exp(-0.5*pow(z/(M_PI/1.35),8));
+
+  fout[0] = fmax(profile, Ti_floor);
 }
 
 // Taken from rt gk d3d 3x2c, is this the non uniform v grid mapping?
@@ -287,8 +307,8 @@ struct gk_app_ctx create_ctx(void)
 
   // Grid parameters
   int num_cell_x = 32; 
-  int num_cell_y = 8;
-  int num_cell_z = 96;
+  int num_cell_y = 32;
+  int num_cell_z = 24;
   int num_cell_vpar = 16;
   int num_cell_mu = 8;
   int poly_order = 1;
@@ -309,16 +329,18 @@ struct gk_app_ctx create_ctx(void)
   struct gk_app_ctx ctx = {
     .cdim = cdim,
     .vdim = vdim,
-    .B0       = B0    ,
     .psi_sep  = psi_sep ,
     .psi_axis = psi_axis,
-    .Lx       = Lx    ,
-    .Ly       = Ly    ,
-    .Lz       = Lz    ,
     .x_min = x_min,  .x_max = x_max,
     .y_min = y_min,  .y_max = y_max,
     .z_min = z_min,  .z_max = z_max,
+    .Lx = Lx,
+    .Ly = Ly,
+    .Lz = Lz,
     .rho_min = rho_min,  .rho_max = rho_max,
+    .num_species = num_species,
+    .me = me,  .qe = qe,
+    .mi = mi,  .qi = qi,
     .den_upstream_min = den_upstream_min,
     .den_upstream_max = den_upstream_max,
     .den_floor        = den_floor       ,
@@ -331,10 +353,8 @@ struct gk_app_ctx create_ctx(void)
     .Ti_upstream_max  = Ti_upstream_max ,
     .Ti_floor         = Ti_floor        ,
     .sig_rho_Ti       = sig_rho_Ti      ,
-    .num_species = num_species,
-    .me = me,  .qe = qe,
-    .mi = mi,  .qi = qi,
     .n0 = n0,  .Te0 = Te0,  .Ti0 = Ti0,
+    .B0 = B0,
     .num_sources = num_sources,
     .adapt_energy_srcCORE = adapt_energy_srcCORE,
     .adapt_particle_srcCORE = adapt_particle_srcCORE,
@@ -503,7 +523,9 @@ main(int argc, char **argv)
     },
 
     .num_diag_moments = 10,
-    .diag_moments = {GKYL_F_MOMENT_HAMILTONIAN, GKYL_F_MOMENT_MAXWELLIAN, GKYL_F_MOMENT_BIMAXWELLIAN, GKYL_F_MOMENT_M0, GKYL_F_MOMENT_M1, GKYL_F_MOMENT_M2PAR, GKYL_F_MOMENT_M2PERP, GKYL_F_MOMENT_M2, GKYL_F_MOMENT_M3PAR, GKYL_F_MOMENT_M3PERP},
+    .diag_moments = {GKYL_F_MOMENT_HAMILTONIAN, GKYL_F_MOMENT_MAXWELLIAN, GKYL_F_MOMENT_BIMAXWELLIAN,
+      GKYL_F_MOMENT_M0, GKYL_F_MOMENT_M1, GKYL_F_MOMENT_M2PAR, GKYL_F_MOMENT_M2PERP, GKYL_F_MOMENT_M2,
+      GKYL_F_MOMENT_M3PAR, GKYL_F_MOMENT_M3PERP},
 
     .num_integrated_diag_moments = 1,
     .integrated_diag_moments = { GKYL_F_MOMENT_HAMILTONIAN },
@@ -626,7 +648,9 @@ main(int argc, char **argv)
     },
 
     .num_diag_moments = 10,
-    .diag_moments = {GKYL_F_MOMENT_HAMILTONIAN, GKYL_F_MOMENT_MAXWELLIAN, GKYL_F_MOMENT_BIMAXWELLIAN, GKYL_F_MOMENT_M0, GKYL_F_MOMENT_M1, GKYL_F_MOMENT_M2PAR, GKYL_F_MOMENT_M2PERP, GKYL_F_MOMENT_M2, GKYL_F_MOMENT_M3PAR, GKYL_F_MOMENT_M3PERP},
+    .diag_moments = {GKYL_F_MOMENT_HAMILTONIAN, GKYL_F_MOMENT_MAXWELLIAN, GKYL_F_MOMENT_BIMAXWELLIAN,
+      GKYL_F_MOMENT_M0, GKYL_F_MOMENT_M1, GKYL_F_MOMENT_M2PAR, GKYL_F_MOMENT_M2PERP, GKYL_F_MOMENT_M2,
+      GKYL_F_MOMENT_M3PAR, GKYL_F_MOMENT_M3PERP},
     
     .num_integrated_diag_moments = 1,
     .integrated_diag_moments = { GKYL_F_MOMENT_HAMILTONIAN },
