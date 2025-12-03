@@ -225,7 +225,7 @@ struct gk_app_ctx create_ctx(void)
 
   // Grid parameters
   int num_cell_x = 32; 
-  int num_cell_y = 8;
+  int num_cell_y = 32;
   int num_cell_z = 24;
   int num_cell_vpar = 16;
   int num_cell_mu = 8;
