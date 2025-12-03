@@ -33,6 +33,8 @@ struct gk_app_ctx {
   double floor_srcWALL;
   // Grid parameters
   char eqdsk_file[128];
+  double psi_axis;
+  double psi_sep;
   double Lx, Ly, Lz;
   double x_min, x_max, y_min, y_max, z_min, z_max, rho_min, rho_max;
   int num_cell_x, num_cell_y, num_cell_z, num_cell_vpar, num_cell_mu;
@@ -43,6 +45,18 @@ struct gk_app_ctx {
   int num_frames, int_diag_calc_num, num_failures_max;
   double dt_failure_tol;
 };
+
+double rho_psi(double psi, double psi_axis, double psi_sep)
+{
+  // Normalized radial coordinate.
+  return sqrt((psi-psi_axis) / (psi_sep - psi_axis));
+}
+
+double psi_rho(double rho, double psi_axis, double psi_sep)
+{
+  // Poloidal flux given the normalized radial coordinate.
+  return pow(rho,2) * (psi_sep - psi_axis) + psi_axis;
+}
 
 // Density initial condition (like AUG exp profile)
 void eval_density(double t, const double * GKYL_RESTRICT xn, double* GKYL_RESTRICT fout, void *ctx)
@@ -145,7 +159,10 @@ struct gk_app_ctx create_ctx(void)
   };
   memcpy(efit_inp.filepath, eqdsk_file, sizeof(eqdsk_file));
   struct gkyl_efit *efit = gkyl_efit_new(&efit_inp);
-  double psi_sep = efit->psisep;
+  double R_axis = efit->rmaxis; // R of the magnetic axis.
+  double Z_axis = efit->zmaxis; // Z of the magnetic axis.
+  double psi_sep = efit->psisep; // psi at the separatrix.
+  double psi_axis = efit->simag; // psi at the magnetic axis.
   double Rxpt = efit->Rxpt[0], Zxpt = efit->Zxpt[0];
   gkyl_efit_release(efit);
 
@@ -156,7 +173,7 @@ struct gk_app_ctx create_ctx(void)
   double Te0 = 28.0*eV;
   double Ti0 = 135.0*eV;
   double n0  = 2.7e18;   // [1/m^3]
-  double B0 = 0.5*(3.962121e+00+1.943704e+00);
+  double B0 = 0.5*(3.995834e+00+1.938918e+00);
 
   double vte = sqrt(Te0/me), vti = sqrt(Ti0/mi); // Thermal velocities
   double c_s = sqrt(Te0/mi);
@@ -166,8 +183,12 @@ struct gk_app_ctx create_ctx(void)
   // Configuration domain parameters 
   double rho_min = 1.00;
   double rho_max = 1.10;
+  // The limits
+  //  x_min = 0.034
+  //  x_max = 0.0535
+  // give a 3 cm radial box at the OMP.
   double x_min = 0.034;
-  double x_max = 0.050;
+  double x_max = 0.0535;
   double Lx = x_max - x_min;
 
   double r0 = 0.5;
@@ -215,9 +236,9 @@ struct gk_app_ctx create_ctx(void)
   int poly_order = 1;
   // Velocity box dimensions
   double vpar_max_elc = 6.*vte;
-  double mu_max_elc   = 1.*me*pow(4*vte,2)/(2*B0);
+  double mu_max_elc   = me*pow(4*vte,2)/(2*B0);
   double vpar_max_ion = 6.*vti;
-  double mu_max_ion   = 1.*mi*pow(4*vti,2)/(2*B0);
+  double mu_max_ion   = mi*pow(4*vti,2)/(2*B0);
   double final_time = 2.e-3;
   int num_frames = 2000;
   double write_phase_freq = 0.01;

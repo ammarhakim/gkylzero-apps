@@ -183,6 +183,10 @@ struct gk_app_ctx create_ctx(void)
   // Configuration domain parameters 
   double rho_min = 1.00;
   double rho_max = 1.10;
+  // The limits
+  //  x_min = 0.181
+  //  x_max = 0.201
+  // give a 3 cm radial box at the OMP.
   double x_min = 0.181;
   double x_max = 0.201;
   double Lx = x_max - x_min;
@@ -232,9 +236,9 @@ struct gk_app_ctx create_ctx(void)
   int poly_order = 1;
   // Velocity box dimensions
   double vpar_max_elc = 6.*vte;
-  double mu_max_elc   = 1.*me*pow(4*vte,2)/(2*B0);
+  double mu_max_elc   = me*pow(4*vte,2)/(2*B0);
   double vpar_max_ion = 6.*vti;
-  double mu_max_ion   = 1.*mi*pow(4*vti,2)/(2*B0);
+  double mu_max_ion   = mi*pow(4*vti,2)/(2*B0);
   double final_time = 2.e-3;
   int num_frames = 2000;
   double write_phase_freq = 0.01;
