@@ -26,7 +26,7 @@ psi_min = 0.034 #[ Lower psi of Gkeyll simulation.
 psi_max = 0.050 #[ Upper psi of Gkeyll simulation.
 npsi = 6 #[ Number of psi contours to plot.
 
-out_figure_file = True #[ Whether to write figure to a file.
+out_figure_file = False #[ Whether to write figure to a file.
 out_figure_dir = "./" #[ Where to place figure if written.
 
 

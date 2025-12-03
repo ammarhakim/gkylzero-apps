@@ -56,3 +56,7 @@ Module.symvers
 Mkfile.old
 dkms.conf
 
+postgkyl-scripts/dliu/Carralero_2018/simulation/low_density/input_file/*.gkyl
+postgkyl-scripts/dliu/Carralero_2018/simulation/low_density/input_file/*.json
+postgkyl-scripts/dliu/Carralero_2018/simulation/high_density/input_file/*.gkyl
+postgkyl-scripts/dliu/Carralero_2018/simulation/high_density/input_file/*.json

@@ -129,24 +129,11 @@ void mapc2p_vel_ion(double t, const double *vc, double* GKYL_RESTRICT vp, void *
 struct gk_app_ctx create_ctx(void)
 {
   int cdim = 3, vdim = 2; // Dimensionality
-  double B0 = 0.5*(3.319027e+00+1.618709e+00);
   // Universal constant parameters.
   double eps0 = GKYL_EPSILON0, eV = GKYL_ELEMENTARY_CHARGE;
   double mp = GKYL_PROTON_MASS, me = GKYL_ELECTRON_MASS;
   double qi = eV; // ion charge
   double qe = -eV; // electron charge
-
-  // Plasma parameters
-  int num_species = 2;
-  double AMU = 2.01410177811;
-  double mi  = mp*AMU;   // Deuterium ions
-  double Te0 = 28.0*eV;
-  double Ti0 = 135.0*eV;
-  double n0  = 2.7e18;   // [1/m^3]
-  double vte = sqrt(Te0/me), vti = sqrt(Ti0/mi); // Thermal velocities
-  double c_s = sqrt(Te0/mi);
-  double omega_ci = fabs(qi*B0/mi);
-  double rho_s = c_s/omega_ci;
 
   // Location of the numerical equilibrium.
   char eqdsk_file[128] = "../../../experiment/33341/Equilibria/Low_density/33341_1.775.eqdsk";
@@ -161,6 +148,20 @@ struct gk_app_ctx create_ctx(void)
   double psi_sep = efit->psisep;
   double Rxpt = efit->Rxpt[0], Zxpt = efit->Zxpt[0];
   gkyl_efit_release(efit);
+
+  // Plasma parameters
+  int num_species = 2;
+  double AMU = 2.01410177811;
+  double mi  = mp*AMU;   // Deuterium ions
+  double Te0 = 28.0*eV;
+  double Ti0 = 135.0*eV;
+  double n0  = 2.7e18;   // [1/m^3]
+  double B0 = 0.5*(3.962121e+00+1.943704e+00);
+
+  double vte = sqrt(Te0/me), vti = sqrt(Ti0/mi); // Thermal velocities
+  double c_s = sqrt(Te0/mi);
+  double omega_ci = fabs(qi*B0/mi);
+  double rho_s = c_s/omega_ci;
 
   // Configuration domain parameters 
   double rho_min = 1.00;
@@ -373,6 +374,7 @@ main(int argc, char **argv)
       .iter_eps = 1e-12,
       .max_iter = 10,
     },
+
     .collisions =  {
       .collision_id = GKYL_BGK_COLLISIONS,
       .den_ref = ctx.n0, // Density used to calculate coulomb logarithm
@@ -495,6 +497,7 @@ main(int argc, char **argv)
       .iter_eps = 1e-12,
       .max_iter = 10,
     },
+
     .collisions =  {
       .collision_id = GKYL_BGK_COLLISIONS,
       .den_ref = ctx.n0, // Density used to calculate coulomb logarithm
@@ -554,9 +557,8 @@ main(int argc, char **argv)
 
   // Geometry
   struct gkyl_efit_inp efit_inp = {
-    // psiRZ and related inputs
-    .rz_poly_order = 2,                      // polynomial order for psi(R,Z) used for field line tracing
-    .flux_poly_order = 1,                    // polynomial order for fpol(psi)
+    .rz_poly_order = 2,   // polynomial order for psi(R,Z) used for field line tracing
+    .flux_poly_order = 1, // polynomial order for fpol(psi)
   };
   // Copy eqdsk file into efit_inp.
   memcpy(efit_inp.filepath, ctx.eqdsk_file, sizeof(ctx.eqdsk_file));
