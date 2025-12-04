@@ -226,8 +226,8 @@ struct gk_app_ctx create_ctx(void)
   double R_omp_min = 2.14397; // Min major radius at the OMP.
   double R_omp_max = 2.17442; // Max major radius at the OMP.
 
-  double z_min = -(M_PI-1e10);
-  double z_max =   M_PI-1e10;
+  double z_min = -(M_PI-1e-10);
+  double z_max =   M_PI-1e-10;
 
   double rho_min = rho_psi(x_min, psi_axis, psi_sep);
   double rho_max = rho_psi(x_max, psi_axis, psi_sep);
