@@ -1,0 +1,55 @@
+#!/bin/bash -l
+
+#.Declare a name for this job, preferably with 16 or fewer characters.
+#SBATCH -J gk_aug10
+#SBATCH -A m5053
+
+#.Request the queue (enter the possible names, if omitted, default is the default)
+#.this job is going to use the default
+#SBATCH -q regular
+
+#.Number of nodes to request (Perlmutter has 64 cores and 4 GPUs per node)
+#SBATCH -N 6
+#SBATCH --ntasks-per-node 4
+
+#.Specify GPU needs:
+#SBATCH --constraint gpu
+#SBATCH --gpus-per-node 4
+
+#.Request wall time
+#SBATCH -t 48:00:00
+
+#.Mail is sent to you when the job starts and when it terminates or aborts.
+#SBATCH --mail-user=dliu2@pppl.gov
+#SBATCH --mail-type=END,FAIL,REQUEUE
+
+#.Load modules (this must match those in the machines/configure script).
+module load PrgEnv-gnu/8.5.0
+module load craype-accel-nvidia80
+module load cray-mpich/8.1.28
+module load cudatoolkit/12.4
+module load nccl/2.18.3-cu12
+
+#.Disable CUDA-ware MPI, since it causes problems on Perlmutter and we use NCCL alone.
+export MPICH_GPU_SUPPORT_ENABLED=0
+
+#.On Perlmutter some jobs get warnings about DVS_MAXNODES (used in file stripping).
+#.We set it to 24 for now, but really this depends on the amount/size of I/O being performed.
+#.See online NERSC docs and the intro_mpi man page.
+export DVS_MAXNODES=24_
+export MPICH_MPIIO_DVS_MAXNODES=24
+
+#[ Find last frame to restart from.
+last_frame=0
+matching_files=$(ls gk_bgk_im_asdex_low_adapt_3x2v_p1-elc_[0-9]*)
+for file in $matching_files; do
+  # # Extract the frame between the prefix and suffix
+  frame=$(echo "$file" | sed 's/gk_bgk_im_asdex_low_adapt_3x2v_p1-elc_//; s/\.gkyl//')
+  # If the frame is greater than the current last_frame, update last_frame and max_file
+  if [ "$frame" -gt "$last_frame" ]; then
+    last_frame="$frame"
+  fi
+done
+
+echo "srun -u -n 24 --gpus 24 ../gk_bgk_im_asdex_low_adapt_3x2v_p1 -g -M -e 24 -o nuFrac=10.0"
+srun -u -n 24 --gpus 24 ../gk_bgk_im_asdex_low_adapt_3x2v_p1 -g -M -e 24 -o nuFrac=10.0
