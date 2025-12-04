@@ -15,10 +15,25 @@
 // Define the context of the simulation. This stores global parameters.
 struct gk_app_ctx {
   int cdim, vdim;
-  double B0;
   // Plasma parameters
   int num_species;
-  double me, qe, mi, qi, n0, Te0, Ti0;
+  double me, qe, mi, qi;
+  // Initial conditions.
+  double den_upstream_min; 
+  double den_upstream_max; 
+  double den_floor       ; 
+  double sig_rho_den     ; 
+
+  double Te_upstream_min ; 
+  double Te_upstream_max ; 
+  double Te_floor        ; 
+  double sig_rho_Te      ; 
+
+  double Ti_upstream_min ; 
+  double Ti_upstream_max ; 
+  double Ti_floor        ; 
+  double sig_rho_Ti      ; 
+  double n0, Te0, Ti0, B0; // Reference parameters.
   // Collision parameters
   double nuFrac, nuElc, nuIon;
   // Source parameters
@@ -62,14 +77,24 @@ double psi_rho(double rho, double psi_axis, double psi_sep)
 void eval_density(double t, const double * GKYL_RESTRICT xn, double* GKYL_RESTRICT fout, void *ctx)
 {
   double x = xn[0], z = xn[2];
-  struct gk_app_ctx *app = ctx;
-  double x_min = app->x_min, x_max = app->x_max;
-  double rho_min = app->rho_min, rho_max = app->rho_max;
-  double rho = (x-x_min)/(x_max-x_min)*(rho_max-rho_min) + rho_min;
-  double n0 = app->n0;
-  double floor = 0.1*n0;
 
-  fout[0] = fmax(-2.35e18*tanh(62.0*(rho-rho_min))+2.712e18, floor);
+  struct gk_app_ctx *app = ctx;
+  double psi_axis = app->psi_axis;
+  double psi_sep = app->psi_sep;
+  double rho_min = app->rho_min;
+  double sig_rho_den = app->sig_rho_den;
+  double den_upstream_max = app->den_upstream_max;
+  double den_floor = app->den_floor;
+
+  double rho = rho_psi(x, psi_axis, psi_sep);
+
+  // Use a constant in z profile because in reality this is a semi-detached
+  // case for which the density actually increases towards the divertor plates,
+  // but we don't have the physics for that. The simulation will likely produce
+  // a decreasing density profile towards the plates.
+  double profile = den_upstream_max * exp(-(rho - rho_min)/sig_rho_den);
+
+  fout[0] = fmax(profile, den_floor);
 }
 
 // Flow initial condition
@@ -83,26 +108,48 @@ eval_upar(double t, const double * GKYL_RESTRICT xn, double* GKYL_RESTRICT fout,
 void eval_temp_elc(double t, const double * GKYL_RESTRICT xn, double* GKYL_RESTRICT fout, void *ctx)
 {
   double x = xn[0], z = xn[2];
-  struct gk_app_ctx *app = ctx;
-  double eV = GKYL_ELEMENTARY_CHARGE;
-  double x_min = app->x_min, x_max = app->x_max;
-  double rho_min = app->rho_min, rho_max = app->rho_max;
-  double rho = (x-x_min)/(x_max-x_min)*(rho_max-rho_min) + rho_min;
 
-  fout[0] = (-20.0*tanh(80.0*(rho-rho_min))+28.0) * eV;
+  struct gk_app_ctx *app = ctx;
+  double psi_axis = app->psi_axis;
+  double psi_sep = app->psi_sep;
+  double rho_min = app->rho_min;
+  double sig_rho_Te = app->sig_rho_Te;
+  double Te_upstream_max = app->Te_upstream_max;
+  double Te_floor = app->Te_floor;
+
+  double rho = rho_psi(x, psi_axis, psi_sep);
+
+  double profile = Te_upstream_max * exp(-(rho - rho_min)/sig_rho_Te);
+
+  // Multiply by a function that smoothly drops the temperature by 4X towards
+  // the divertor plates.
+  profile *= 0.25+0.75*exp(-0.5*pow(z/(M_PI/1.35),8));
+
+  fout[0] = fmax(profile, Te_floor);
 }
 
 // Ion temperature initial conditions
 void eval_temp_ion(double t, const double * GKYL_RESTRICT xn, double* GKYL_RESTRICT fout, void *ctx)
 {
   double x = xn[0], z = xn[2];
-  struct gk_app_ctx *app = ctx;
-  double eV = GKYL_ELEMENTARY_CHARGE;
-  double x_min = app->x_min, x_max = app->x_max;
-  double rho_min = app->rho_min, rho_max = app->rho_max;
-  double rho = (x-x_min)/(x_max-x_min)*(rho_max-rho_min) + rho_min;
 
-  fout[0] = (-115.0*tanh(60.0*(rho-rho_min))+135.0) * eV;
+  struct gk_app_ctx *app = ctx;
+  double psi_axis = app->psi_axis;
+  double psi_sep = app->psi_sep;
+  double rho_min = app->rho_min;
+  double sig_rho_Ti = app->sig_rho_Ti;
+  double Ti_upstream_max = app->Ti_upstream_max;
+  double Ti_floor = app->Ti_floor;
+
+  double rho = rho_psi(x, psi_axis, psi_sep);
+
+  double profile = Ti_upstream_max * exp(-(rho - rho_min)/sig_rho_Ti);
+
+  // Multiply by a function that smoothly drops the temperature by 4X towards
+  // the divertor plates.
+  profile *= 0.25+0.75*exp(-0.5*pow(z/(M_PI/1.35),8));
+
+  fout[0] = fmax(profile, Ti_floor);
 }
 
 // Taken from rt gk d3d 3x2c, is this the non uniform v grid mapping?
@@ -145,9 +192,7 @@ struct gk_app_ctx create_ctx(void)
   int cdim = 3, vdim = 2; // Dimensionality
   // Universal constant parameters.
   double eps0 = GKYL_EPSILON0, eV = GKYL_ELEMENTARY_CHARGE;
-  double mp = GKYL_PROTON_MASS, me = GKYL_ELECTRON_MASS;
-  double qi = eV; // ion charge
-  double qe = -eV; // electron charge
+  double proton_mass = GKYL_PROTON_MASS, electron_mass = GKYL_ELECTRON_MASS;
 
   // Location of the numerical equilibrium.
   char eqdsk_file[128] = "../../../experiment/33341/Equilibria/Low_density/33341_1.775.eqdsk";
@@ -166,40 +211,72 @@ struct gk_app_ctx create_ctx(void)
   double Rxpt = efit->Rxpt[0], Zxpt = efit->Zxpt[0];
   gkyl_efit_release(efit);
 
-  // Plasma parameters
-  int num_species = 2;
-  double AMU = 2.01410177811;
-  double mi  = mp*AMU;   // Deuterium ions
-  double Te0 = 28.0*eV;
-  double Ti0 = 135.0*eV;
-  double n0  = 2.7e18;   // [1/m^3]
-  double B0 = 0.5*(3.995834e+00+1.938918e+00);
+  double bmag_min = 1.938918e+00;
+  double bmag_max = 3.995834e+00;
 
-  double vte = sqrt(Te0/me), vti = sqrt(Ti0/mi); // Thermal velocities
+  // The radial extents
+  //  x_min = 0.034
+  //  x_max = 0.0535
+  // give 
+  //  R_omp_min = 2.14235
+  //  R_omp_max = 2.17269
+  // so a 3 cm radial box at the OMP.
+  double x_min = 0.034;
+  double x_max = 0.0535;
+  double R_omp_min = 2.14235; // Min major radius at the OMP.
+  double R_omp_max = 2.17269; // Max major radius at the OMP.
+
+  double z_min = -(M_PI-1e-10);
+  double z_max =   M_PI-1e-10;
+
+  double rho_min = rho_psi(x_min, psi_axis, psi_sep);
+  double rho_max = rho_psi(x_max, psi_axis, psi_sep);
+
+  // Species mass and charge.
+  int num_species = 2;
+  double me = electron_mass;
+  double mi = proton_mass*2.01410177811; // Deuterium ions
+  double qi =  eV; // ion charge
+  double qe = -eV; // electron charge
+
+  // Parameters controlling initial conditions.
+  double den_upstream_min = 1.0e18; // [1/m^3]
+  double den_upstream_max = 4.4e18; // [1/m^3]
+  double den_floor = 0.05*den_upstream_max; // Min density in IC.
+  double sig_rho_den = 0.6*(rho_max - rho_min); // Exp delay length in density.
+
+  double Te_upstream_min = 14.0*eV; // [J]
+  double Te_upstream_max = 50.0*eV; // [J]
+  double Te_floor = 0.05*Te_upstream_max; // Min Te in IC.
+  double sig_rho_Te = 0.7*(rho_max - rho_min); // Exp delay length in Te.
+
+  double Ti_upstream_min = 45.0*eV; // [J]
+  double Ti_upstream_max = 150.0*eV; // [J]
+  double Ti_floor = 0.05*Ti_upstream_max; // Min Ti in IC.
+  double sig_rho_Ti = 0.7*(rho_max - rho_min); // Exp delay length in Ti.
+
+  // Reference parameters.
+  double n0  = 0.5*(den_upstream_min+den_upstream_max);
+  double Te0 = 0.5*(Te_upstream_min+Te_upstream_max);
+  double Ti0 = 0.5*(Ti_upstream_min+Ti_upstream_max);
+  double B0  = 0.5*(bmag_min+bmag_max);
+
+  double vte = sqrt(Te0/me);
+  double vti = sqrt(Ti0/mi);
   double c_s = sqrt(Te0/mi);
   double omega_ci = fabs(qi*B0/mi);
   double rho_s = c_s/omega_ci;
 
-  // Configuration domain parameters 
-  double rho_min = 1.00;
-  double rho_max = 1.10;
-  // The limits
-  //  x_min = 0.034
-  //  x_max = 0.0535
-  // give a 3 cm radial box at the OMP.
-  double x_min = 0.034;
-  double x_max = 0.0535;
-  double Lx = x_max - x_min;
-
-  double r0 = 0.5*(2.14235+2.17269)-R_axis;
-  double q0 = 4.35; 
+  double q_min = 3.987844e+00; 
+  double q_max = 4.948086e+00; 
+  double q0 = 0.5*(q_min+q_max);
+  double r0 = 0.5*(R_omp_min+R_omp_max)-R_axis;
   double Ly = 100*rho_s*q0/r0;
   double y_min = -Ly/2.;
   double y_max =  Ly/2.;
 
-  double Lz    = 2.*M_PI-1e-10;       // Domain size along magnetic field.
-  double z_min = -Lz/2.;
-  double z_max =  Lz/2.;
+  double Lx = x_max - x_min;
+  double Lz = z_max - z_min;
 
   // Source parameters
   int num_sources = 2;
@@ -239,6 +316,7 @@ struct gk_app_ctx create_ctx(void)
   double mu_max_elc   = me*pow(4*vte,2)/(2*B0);
   double vpar_max_ion = 6.*vti;
   double mu_max_ion   = mi*pow(4*vti,2)/(2*B0);
+
   double final_time = 2.e-3;
   int num_frames = 2000;
   double write_phase_freq = 0.01;
@@ -249,18 +327,32 @@ struct gk_app_ctx create_ctx(void)
   struct gk_app_ctx ctx = {
     .cdim = cdim,
     .vdim = vdim,
-    .B0     = B0    ,
-    .Lx     = Lx    ,
-    .Ly     = Ly    ,
-    .Lz     = Lz    ,
-    .rho_min = rho_min,  .rho_max = rho_max,
+    .psi_sep  = psi_sep ,
+    .psi_axis = psi_axis,
     .x_min = x_min,  .x_max = x_max,
     .y_min = y_min,  .y_max = y_max,
     .z_min = z_min,  .z_max = z_max,
+    .Lx = Lx,
+    .Ly = Ly,
+    .Lz = Lz,
+    .rho_min = rho_min,  .rho_max = rho_max,
     .num_species = num_species,
     .me = me,  .qe = qe,
     .mi = mi,  .qi = qi,
+    .den_upstream_min = den_upstream_min,
+    .den_upstream_max = den_upstream_max,
+    .den_floor        = den_floor       ,
+    .sig_rho_den      = sig_rho_den     ,
+    .Te_upstream_min  = Te_upstream_min ,
+    .Te_upstream_max  = Te_upstream_max ,
+    .Te_floor         = Te_floor        ,
+    .sig_rho_Te       = sig_rho_Te      ,
+    .Ti_upstream_min  = Ti_upstream_min ,
+    .Ti_upstream_max  = Ti_upstream_max ,
+    .Ti_floor         = Ti_floor        ,
+    .sig_rho_Ti       = sig_rho_Ti      ,
     .n0 = n0,  .Te0 = Te0,  .Ti0 = Ti0,
+    .B0 = B0,
     .num_sources = num_sources,
     .adapt_energy_srcCORE = adapt_energy_srcCORE,
     .adapt_particle_srcCORE = adapt_particle_srcCORE,
@@ -385,6 +477,12 @@ main(int argc, char **argv)
       .temp = eval_temp_elc,
     },
 
+//    .positivity = {
+//      .type = GKYL_GK_POSITIVITY_SHIFT,
+//      .quasineutrality_rescale = true,
+//      .write_diagnostics = true,
+//    },
+
     .collisionless = {
       .type = GKYL_GK_COLLISIONLESS_ES,
     },
@@ -508,6 +606,12 @@ main(int argc, char **argv)
       .temp = eval_temp_ion,
     },
 
+//    .positivity = {
+//      .type = GKYL_GK_POSITIVITY_SHIFT,
+//      .quasineutrality_rescale = true,
+//      .write_diagnostics = true,
+//    },
+
     .collisionless = {
       .type = GKYL_GK_COLLISIONLESS_ES,
     },
@@ -608,8 +712,6 @@ main(int argc, char **argv)
     .poly_order = ctx.poly_order,
     .basis_type = app_args.basis_type,
     .cfl_frac = 1.0,
-
-    .enforce_positivity = false,
 
     .geometry = {
       .geometry_id = GKYL_TOKAMAK,
