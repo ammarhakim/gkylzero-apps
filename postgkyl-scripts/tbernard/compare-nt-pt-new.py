@@ -20,26 +20,28 @@ mpl.rcParams.update({
 
 eV = 1.602e-19  # Joules
 
-# Fields to plot and their labels
-fields = [
-    'elcDensAve', 'elcTempAve', 'ionTempAve', 
-    'phiAve', 'ErAve', 'VEshearAve', 
-    'dn', 'dT', 'dphi',
-    'reynolds_stress', 'reynolds_force'
-]
-units = [
-    'm$^{-3}$', 'eV', 'eV', 'V', 'kV/m', '1/s', 'm$^{-3}$', 'eV', 'V',
-    r'm$^2$/s$^2$', r'm/s$^2$'  
-]
-titles = [
-    r'a) $n_e$', r'b) $T_e$', r'c) $T_i$', 
-    r'a) $\phi$', r'b) $E_r$', r'c) $|\gamma_E|$',
-    r'a) $\tilde{n}_{rms}$', r'b) $\tilde{T}_{e,rms}$',
-    r'c) $\tilde{\phi}_{rms}$',
-    # r'a) $\tilde{n}_{rms}/\langle{n}\rangle$', r'b) $\tilde{T}_{e,rms}/\langle{T_e}\rangle$',
-    # r'c) $e\tilde{\phi}_{rms}/\langle{T_e}\rangle$',
-    r'a) Reynolds Stress', r'b) Reynolds Force'
-]
+# Fields to plot and their labels (now as dictionaries)
+fields = {
+    'profiles': {
+        'elcDensAve': {'unit': 'm$^{-3}$', 'title': r'a) $n_e$'},
+        'elcTempAve': {'unit': 'eV', 'title': r'b) $T_e$'},
+        'ionTempAve': {'unit': 'eV', 'title': r'c) $T_i$'},
+    },
+    'potential': {
+        'phiAve': {'unit': 'V', 'title': r'a) $\phi$'},
+        'ErAve': {'unit': 'kV/m', 'title': r'b) $E_r$'},
+        'VEshearAve': {'unit': '1/s', 'title': r'c) $|\gamma_E|$'},
+    },
+    'fluctuations': {
+        'dn': {'unit': '', 'title': r'a) $\tilde{n}_{rms}/\langle{n}\rangle$'},
+        'dT': {'unit': '', 'title': r'b) $\tilde{T}_{e,rms}/\langle{T_e}\rangle$'},
+        'dphi': {'unit': '', 'title': r'c) $e\tilde{\phi}_{rms}/\langle{T_e}\rangle$'},
+    },
+    'reynolds': {
+        'reynolds_stress': {'unit': r'm$^2$/s$^2$', 'title': r'a) Reynolds Stress'},
+        'reynolds_force': {'unit': r'm/s$^2$', 'title': r'b) Reynolds Force'},
+    }
+}
 
 def load_hdf5_field(filepath, field, xstart_idx=0, xend_idx=None):
     with h5py.File(filepath, 'r') as f:
@@ -52,17 +54,18 @@ def plot_profiles(file_posD, file_negD, lcfs_shift, show):
     x_pos -= lcfs_shift
     x_neg -= lcfs_shift
 
+    profile_fields = list(fields['profiles'].keys())
     fig, axs = plt.subplots(1, 3, figsize=(14, 4))
     for i, ax in enumerate(axs):
-        field = fields[i]  # n_e, T_e, T_i
+        field = profile_fields[i]
         _, pos_data = load_hdf5_field(file_posD, field, x_idx)
         _, neg_data = load_hdf5_field(file_negD, field, x_idx)
         ax.plot(x_pos, pos_data, label='PT', color='red', linewidth=2)
         ax.plot(x_neg, neg_data, label='NT', color='blue', linewidth=2)
         ax.axvline(x=0, color='gray')
-        ax.set_title(titles[i])
+        ax.set_title(fields['profiles'][field]['title'])
         ax.set_xlabel(r'$R - R_{LCFS}$ (m)')
-        ax.set_ylabel(units[i])
+        ax.set_ylabel(fields['profiles'][field]['unit'])
         ax.set_xlim(-0.1, 0.05)
         ax.legend()
     plt.tight_layout()
@@ -79,17 +82,18 @@ def plot_fluctuations(file_posD, file_negD, lcfs_shift, show):
     x_pos -= lcfs_shift
     x_neg -= lcfs_shift
 
+    fluct_fields = list(fields['fluctuations'].keys())
     fig, axs = plt.subplots(1, 3, figsize=(14, 4))
     for i, ax in enumerate(axs):
-        field = fields[i + 6]
+        field = fluct_fields[i]
         _, pos_data = load_hdf5_field(file_posD, field, x_idx)
         _, neg_data = load_hdf5_field(file_negD, field, x_idx)
         ax.plot(x_pos, pos_data, label='PT', color='red', linewidth=2)
         ax.plot(x_neg, neg_data, label='NT', color='blue', linewidth=2)
         ax.axvline(x=0, color='gray')
-        ax.set_title(titles[i + 6])
+        ax.set_title(fields['fluctuations'][field]['title'])
         ax.set_xlabel(r'$R - R_{LCFS}$ (m)')
-        ax.set_ylabel(units[i + 6])
+        ax.set_ylabel(fields['fluctuations'][field]['unit'])
         ax.set_xlim(-0.1, 0.05)
         ax.legend()
     plt.tight_layout()
@@ -106,9 +110,10 @@ def plot_potential_fields(file_posD, file_negD, lcfs_shift, show):
     x_pos -= lcfs_shift
     x_neg -= lcfs_shift
 
+    pot_fields = list(fields['potential'].keys())
     fig, axs = plt.subplots(1, 3, figsize=(14, 4))
     for i, ax in enumerate(axs):
-        field = fields[i + 3]
+        field = pot_fields[i]
         _, pos_data = load_hdf5_field(file_posD, field, x_idx)
         _, neg_data = load_hdf5_field(file_negD, field, x_idx)
         if field == 'ErAve':
@@ -121,9 +126,9 @@ def plot_potential_fields(file_posD, file_negD, lcfs_shift, show):
         ax.plot(x_pos, pos_data, label='PT', color='red', linewidth=2)
         ax.plot(x_neg, neg_data, label='NT', color='blue', linewidth=2)
         ax.axvline(x=0, color='gray')
-        ax.set_title(titles[i + 3])
+        ax.set_title(fields['potential'][field]['title'])
         ax.set_xlabel(r'$R - R_{LCFS}$ (m)')
-        ax.set_ylabel(units[i + 3])
+        ax.set_ylabel(fields['potential'][field]['unit'])
         ax.legend()
     plt.tight_layout()
     plt.savefig('phi-Ve-gamE_from_hdf5.pdf')
@@ -132,123 +137,39 @@ def plot_potential_fields(file_posD, file_negD, lcfs_shift, show):
     else:
         plt.close()
 
-# [unchanged imports and setup above]
-
-def plot_fluxes(file_posD, file_negD, lcfs_shift, show):
-    x_pos, _ = load_hdf5_field(file_posD, 'x_vals')
-    x_neg, _ = load_hdf5_field(file_negD, 'x_vals')
-    Nx = len(x_pos)
-    lcfs_idx = int(Nx * 2 / 3)
-    x_idx = 10
-
-    Gx_field, Qxe_field, Qxi_field, Qpara_field, ne_field = 'Gx', 'Qxe', 'Qxi', 'QparaAve', 'elcDensAve'
-
-    x_pos, Gx_pos = load_hdf5_field(file_posD, Gx_field, x_idx)
-    x_neg, Gx_neg = load_hdf5_field(file_negD, Gx_field, x_idx)
-    _, Qxe_pos = load_hdf5_field(file_posD, Qxe_field, x_idx)
-    _, Qxe_neg = load_hdf5_field(file_negD, Qxe_field, x_idx)
-    _, Qxi_pos = load_hdf5_field(file_posD, Qxi_field, x_idx)
-    _, Qxi_neg = load_hdf5_field(file_negD, Qxi_field, x_idx)
-    _, ne_pos = load_hdf5_field(file_posD, ne_field, x_idx)
-    _, ne_neg = load_hdf5_field(file_negD, ne_field, x_idx)
-    _, ne_pos_sol = load_hdf5_field(file_posD, ne_field, lcfs_idx, -5)
-    _, ne_neg_sol = load_hdf5_field(file_negD, ne_field, lcfs_idx, -5)
-    x_sol, Qpara_pos = load_hdf5_field(file_posD, Qpara_field, lcfs_idx, -1)
-    x_sol, Qpara_neg = load_hdf5_field(file_negD, Qpara_field, lcfs_idx, -1)
-    
-    # Shift x-axis to LCFS
-    x_pos -= lcfs_shift
-    x_neg -= lcfs_shift
-    x_sol -= lcfs_shift     
-
-    # Normalize by electron density
-    Gx_pos /= ne_pos
-    Gx_neg /= ne_neg
-    Qxe_pos /= 1e6/eV
-    Qxe_neg /= 1e6/eV
-    Qxi_pos /= 1e6/eV
-    Qxi_neg /= 1e6/eV
-
-    fig = plt.figure(figsize=(14, 4))
-
-    ax = fig.add_subplot(131)
-    ax.set_title('a) Normalized particle flux')
-    ax.axvline(x=0, color='gray')
-    ax.plot(x_pos, Gx_pos, label='PT', color='red', linewidth=2)
-    ax.plot(x_neg, Gx_neg, label='NT', color='blue', linewidth=2)
-    ax.set_xlabel(r'$R-R_{LCFS}$ (m)')
-    ax.set_ylabel(r'$\Gamma_r / n_e$ (m/s)')
-    ax.legend()
-
-    ax = fig.add_subplot(132)
-    ax.set_title('b) Perpendicular heat flux')
-    ax.axvline(x=0, color='gray')
-    ax.plot(x_pos, Qxe_pos + Qxi_pos, label='PT', color='red', linewidth=2)
-    ax.plot(x_neg, Qxe_neg + Qxi_neg, label='NT', color='blue', linewidth=2)
-    ax.set_xlabel(r'$R-R_{LCFS}$ (m)')
-    ax.set_ylabel(r'$(Q_{\perp,e} + Q_{\perp,i})$ (MW/m$^2$)')
-    ax.legend()
-
-
-    ax = fig.add_subplot(133)
-    ax.set_title('c) Parallel heat flux at limiter')
-    ax.axvline(x=0, color='gray')
-    ax.plot(x_sol, Qpara_pos/1e6, label='PT', color='red', linewidth=2)
-    ax.plot(x_sol, Qpara_neg/1e6, label='NT', color='blue', linewidth=2)
-    ax.set_ylim(0,None)
-    ax.set_xlabel(r'$R-R_{LCFS}$ (m)')
-    ax.set_ylabel(r'$Q_{\parallel,tot}$ (MW/m$^2$)')
-    ax.legend()
-
-    plt.tight_layout()
-    plt.savefig('Gr-Qr-Qpar_normed_by_ne.pdf')
-    if show:
-        plt.show()
-    else:
-        plt.close()
-
 def plot_reynolds_stress(file_posD, file_negD, lcfs_shift, show):
-    """
-    Loads and plots the Reynolds stress and Reynolds force from HDF5 files.
-    """
-    x_idx = 10  # Define the starting index for plotting
+    x_idx = 10
+    reyn_fields = list(fields['reynolds'].keys())
 
-    # --- Load Data ---
-    x_pos, stress_pos = load_hdf5_field(file_posD, 'reynolds_stress', x_idx)
-    x_neg, stress_neg = load_hdf5_field(file_negD, 'reynolds_stress', x_idx)
-    
-    _, force_pos = load_hdf5_field(file_posD, 'reynolds_force', x_idx)
-    _, force_neg = load_hdf5_field(file_negD, 'reynolds_force', x_idx)
+    x_pos, stress_pos = load_hdf5_field(file_posD, reyn_fields[0], x_idx)
+    x_neg, stress_neg = load_hdf5_field(file_negD, reyn_fields[0], x_idx)
+    _, force_pos = load_hdf5_field(file_posD, reyn_fields[1], x_idx)
+    _, force_neg = load_hdf5_field(file_negD, reyn_fields[1], x_idx)
 
-    # Shift x-axis to be relative to the LCFS
     x_pos -= lcfs_shift
     x_neg -= lcfs_shift
-    
-    # --- Create Plot ---
+
     fig, axs = plt.subplots(1, 2, figsize=(10, 4), sharex=True)
-    
-    # Panel a) Reynolds Stress
     ax = axs[0]
     ax.plot(x_pos, stress_pos, label='PT', color='red', linewidth=2)
     ax.plot(x_neg, stress_neg, label='NT', color='blue', linewidth=2)
     ax.axvline(x=0, color='gray', linestyle='--')
     ax.axhline(y=0, color='black', linestyle=':', alpha=0.7)
-    ax.set_title(titles[9]) # 'a) Reynolds Stress'
+    ax.set_title(fields['reynolds'][reyn_fields[0]]['title'])
     ax.set_xlabel(r'$R - R_{LCFS}$ (m)')
-    ax.set_ylabel(r'$\langle \delta v_r \delta v_y \rangle$ (' + units[9] + ')')
+    ax.set_ylabel(r'$\langle \delta v_r \delta v_y \rangle$ (' + fields['reynolds'][reyn_fields[0]]['unit'] + ')')
     ax.legend()
-    
-    # Panel b) Reynolds Force
+
     ax = axs[1]
     ax.plot(x_pos, force_pos, label='PT', color='red', linewidth=2)
     ax.plot(x_neg, force_neg, label='NT', color='blue', linewidth=2)
     ax.axvline(x=0, color='gray', linestyle='--')
     ax.axhline(y=0, color='black', linestyle=':', alpha=0.7)
-    ax.set_title(titles[10]) # 'b) Reynolds Force'
+    ax.set_title(fields['reynolds'][reyn_fields[1]]['title'])
     ax.set_xlabel(r'$R - R_{LCFS}$ (m)')
-    ax.set_ylabel(r'$-\nabla_r \langle \delta v_r \delta v_y \rangle$ (' + units[10] + ')')
+    ax.set_ylabel(r'$-\nabla_r \langle \delta v_r \delta v_y \rangle$ (' + fields['reynolds'][reyn_fields[1]]['unit'] + ')')
     ax.legend()
-    
+
     plt.tight_layout()
     plt.savefig('reynolds_stress_from_hdf5.pdf')
     if show:
@@ -257,60 +178,51 @@ def plot_reynolds_stress(file_posD, file_negD, lcfs_shift, show):
         plt.close()
 
 def plot_reynolds_and_shear(file_posD, file_negD, lcfs_shift, show):
-    """
-    Loads and plots the Reynolds stress and Reynolds force from HDF5 files.
-    """
-    x_idx = 10  # Define the starting index for plotting
+    x_idx = 10
+    reyn_fields = list(fields['reynolds'].keys())
+    pot_fields = list(fields['potential'].keys())
 
-    # --- Load Data ---
-    x_pos, stress_pos = load_hdf5_field(file_posD, 'reynolds_stress', x_idx)
-    x_neg, stress_neg = load_hdf5_field(file_negD, 'reynolds_stress', x_idx)
-    
-    _, Er = load_hdf5_field(file_posD, 'ErAve', x_idx)
-    _, Er_neg = load_hdf5_field(file_negD, 'ErAve', x_idx)
-    _, VEshear_pos = load_hdf5_field(file_posD, 'VEshearAve', x_idx)
-    _, VEshear_neg = load_hdf5_field(file_negD, 'VEshearAve', x_idx)
+    x_pos, stress_pos = load_hdf5_field(file_posD, reyn_fields[0], x_idx)
+    x_neg, stress_neg = load_hdf5_field(file_negD, reyn_fields[0], x_idx)
+    _, Er = load_hdf5_field(file_posD, pot_fields[1], x_idx)
+    _, Er_neg = load_hdf5_field(file_negD, pot_fields[1], x_idx)
+    _, VEshear_pos = load_hdf5_field(file_posD, pot_fields[2], x_idx)
+    _, VEshear_neg = load_hdf5_field(file_negD, pot_fields[2], x_idx)
 
-    # Shift x-axis to be relative to the LCFS
     x_pos -= lcfs_shift
     x_neg -= lcfs_shift
-    
-    # --- Create Plot ---
+
     fig, axs = plt.subplots(1, 3, figsize=(14, 4), sharex=True)
-    
-    # Panel a) Reynolds Stress
     ax = axs[0]
     ax.plot(x_pos, stress_pos, label='PT', color='red', linewidth=2)
     ax.plot(x_neg, stress_neg, label='NT', color='blue', linewidth=2)
     ax.axvline(x=0, color='gray', linestyle='--')
     ax.axhline(y=0, color='black', linestyle=':', alpha=0.7)
-    ax.set_title(titles[9]) # 'a) Reynolds Stress'
+    ax.set_title(fields['reynolds'][reyn_fields[0]]['title'])
     ax.set_xlabel(r'$R - R_{LCFS}$ (m)')
-    ax.set_ylabel(r'$\langle \delta v_r \delta v_y \rangle$ (' + units[9] + ')')
+    ax.set_ylabel(r'$\langle \delta v_r \delta v_y \rangle$ (' + fields['reynolds'][reyn_fields[0]]['unit'] + ')')
     ax.legend()
 
-    # Panel b) Er
     ax = axs[1]
     ax.plot(x_pos, Er/1e3, label='PT', color='red', linewidth=2)
     ax.plot(x_neg, Er_neg/1e3, label='NT', color='blue', linewidth=2)
     ax.axvline(x=0, color='gray', linestyle='--')
     ax.axhline(y=0, color='black', linestyle=':', alpha=0.7)
-    ax.set_title(titles[4]) # 'b) $E_r$'
+    ax.set_title(fields['potential'][pot_fields[1]]['title'])
     ax.set_xlabel(r'$R - R_{LCFS}$ (m)')
-    ax.set_ylabel(units[4])
-    ax.legend() 
+    ax.set_ylabel(fields['potential'][pot_fields[1]]['unit'])
+    ax.legend()
 
-    # Panel c) VEshear
     ax = axs[2]
     ax.plot(x_pos, np.abs(VEshear_pos), label='PT', color='red', linewidth=2)
     ax.plot(x_neg, np.abs(VEshear_neg), label='NT', color='blue', linewidth=2)
     ax.axvline(x=0, color='gray', linestyle='--')
     ax.axhline(y=0, color='black', linestyle=':', alpha=0.7)
-    ax.set_title(titles[5]) # 'c) $|\gamma_E|$'
+    ax.set_title(fields['potential'][pot_fields[2]]['title'])
     ax.set_xlabel(r'$R - R_{LCFS}$ (m)')
-    ax.set_ylabel(units[5])
+    ax.set_ylabel(fields['potential'][pot_fields[2]]['unit'])
     ax.legend()
-    
+
     plt.tight_layout()
     plt.savefig('reynolds_and_shear_from_hdf5.pdf')
     if show:

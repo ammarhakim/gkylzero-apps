@@ -54,6 +54,12 @@ def func_data_3d(filename, comp=0):
     CCC = get_center_coords(grid)
     return CCC[0], CCC[1], CCC[2], values[:, :, :, 0]
 
+def func_phase_data(filename, comp=0):
+    gdata = pg.data.GData(filename)
+    grid, values = interpolate_field(gdata, comp)
+    CCC = get_center_coords(grid)
+    return CCC[0], CCC[1], CCC[2], CCC[3], CCC[4], values[:, :, :, :, :, 0]
+
 def func_calc_VE(phi_data, b_i_data, jac_data, bmag_data, z_idx):
     grid, phi = interpolate_field(phi_data, 0)
     _, b_x = interpolate_field(b_i_data, 0)
@@ -120,6 +126,7 @@ def func_calc_norm_fluc(data2d, dataAve, dataNorm, Nt, Ny, Nx):
     dataAve2d = np.array([dataAve] * (Nt * Ny))
     delt = data2dTot - dataAve2d
     sigma = np.sqrt(np.mean(delt ** 2, axis=0))
+    #delt = np.mean(delt, axis=0)
     delt_norm = sigma / dataNorm
     return delt, delt_norm
 

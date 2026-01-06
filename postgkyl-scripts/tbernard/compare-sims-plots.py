@@ -4,6 +4,15 @@ import numpy as np
 import argparse
 import math
 
+plt.rcParams.update({
+    "font.size": 18,
+    "axes.labelsize": 18,
+    "axes.titlesize": 18,
+    "legend.fontsize": 16,
+    "xtick.labelsize": 16,
+    "ytick.labelsize": 16,
+})
+
 # Define all available fields, units, and titles (can be overridden by input)
 all_fields = {
     'elcDensAve':  ('m$^{-3}$', r'$n_e$'),
@@ -21,7 +30,7 @@ def load_hdf5_field(filepath, field):
     with h5py.File(filepath, 'r') as f:
         return f['x_vals'][:], f[field][:]
 
-def plot_fields(files, labels, fields, lcfs_shift, output_name, slice_from=0, end_idx=None, show=False):
+def plot_fields(files, labels, fields, lcfs_shift, output_name, slice_from=0, end_idx=None, show=False, colors=None, linestyles=None):
     x_vals = []
     data = []
 
@@ -30,19 +39,26 @@ def plot_fields(files, labels, fields, lcfs_shift, output_name, slice_from=0, en
         x_vals.append(x - lcfs_shift)
 
     n_fields = len(fields)
-    n_cols = 4
+    n_cols = min(4, n_fields)
     n_rows = math.ceil(n_fields / n_cols)
 
-    fig, axs = plt.subplots(n_rows, n_cols, figsize=(5 * n_cols, 4 * n_rows))
+    subplot_width = 5
+    subplot_height = 4
+    fig_width = subplot_width * n_cols
+    fig_height = subplot_height * n_rows
+
+    fig, axs = plt.subplots(n_rows, n_cols, figsize=(fig_width, fig_height))
     axs = axs.flatten() if n_fields > 1 else [axs]
 
     for i, field in enumerate(fields):
         unit, default_title = all_fields.get(field, ('', field))
         ax = axs[i]
-        for f, label, x in zip(files, labels, x_vals):
+        for idx, (f, label, x) in enumerate(zip(files, labels, x_vals)):
             _, y = load_hdf5_field(f, field)
             y = y[slice_from:end_idx]
-            ax.plot(x[slice_from:end_idx], y, label=label, linewidth=2)
+            color = colors[idx] if colors and idx < len(colors) else None
+            linestyle = linestyles[idx] if linestyles and idx < len(linestyles) else '-'
+            ax.plot(x[slice_from:end_idx], y, label=label, linewidth=2, color=color, linestyle=linestyle)
         ax.axvline(x=0, color='gray', linestyle='--')
         ax.set_title(default_title)
         ax.set_xlabel(r'$R - R_{LCFS}$ (m)')
@@ -77,6 +93,8 @@ def main():
     parser.add_argument("--end_idx", type=int, default=None)
     parser.add_argument("--show", action="store_true", help="Display plot interactively")
     parser.add_argument("--list_fields", action="store_true", help="List available fields and exit")
+    parser.add_argument("--colors", nargs='+', help="List of line colors for each file (e.g. 'red blue green')")
+    parser.add_argument("--linestyles", nargs='+', help="List of line styles for each file (e.g. solid dashed dotted dotdash)")
     args = parser.parse_args()
 
     if args.list_fields:
@@ -89,6 +107,12 @@ def main():
     if len(args.files) != len(args.labels):
         raise ValueError("The number of files must match the number of labels.")
 
+    if args.colors and len(args.colors) != len(args.files):
+        raise ValueError("If --colors is specified, it must match the number of files.")
+
+    if args.linestyles and len(args.linestyles) != len(args.files):
+        raise ValueError("If --linestyles is specified, it must match the number of files.")
+
     if args.all_fields:
         selected_fields = list(all_fields.keys())
     elif args.fields:
@@ -96,7 +120,7 @@ def main():
     else:
         raise ValueError("You must specify either --fields or --all_fields.")
 
-    plot_fields(args.files, args.labels, selected_fields, args.lcfs, args.output, args.slice_from, args.end_idx, args.show)
+    plot_fields(args.files, args.labels, selected_fields, args.lcfs, args.output, args.slice_from, args.end_idx, args.show, args.colors, args.linestyles)
 
 if __name__ == "__main__":
     main()

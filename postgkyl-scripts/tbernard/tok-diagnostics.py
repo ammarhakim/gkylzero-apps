@@ -21,12 +21,18 @@ def main():
     fstart = int(input("fstart? "))
     fend = int(input("fend? "))
     step = int(input("step? "))
-    z_idx = 1
+    z_idx = 1 # when 0 use first index, else use mid-plane
     z_str = 'zmid'
 
     bmag_data = pg.GData(f"{file_prefix}-bmag.gkyl")
     _, y_vals, bmag_2d = utils.func_data_2d(bmag_data, 0, z_idx)
     b_i_data = pg.GData(f"{file_prefix}-b_i.gkyl")
+    _, _, z_vals, b_z = utils.func_data_3d(f"{file_prefix}-b_i.gkyl", 2)
+    
+    b_z = b_z[:,len(y_vals)//2,:]
+    Lc = np.sum(b_z,axis=1)*np.diff(z_vals)[0]
+    Lc_ave = np.mean(Lc[80:])
+    print(f"Lc_ave = {Lc_ave}")
     jacgeo_data = pg.GData(f"{file_prefix}-jacobgeo.gkyl")
 
     diag_names = ['phi', 'elcDens', 'ionDens', 'elcTemp', 'ionTemp', 'VEy', 'VEshear', 'p', 'Er', 'Qpara']
@@ -40,6 +46,8 @@ def main():
         phi_data = pg.data.GData(f"{file_prefix}-field_{tf}.gkyl")
         elc_qpara_data = pg.data.GData(f"{file_prefix}-elc_M3par_{tf}.gkyl")
         ion_qpara_data = pg.data.GData(f"{file_prefix}-ion_M3par_{tf}.gkyl")
+        elc_qperp_data = pg.data.GData(f"{file_prefix}-elc_M3perp_{tf}.gkyl")
+        ion_qperp_data = pg.data.GData(f"{file_prefix}-ion_M3perp_{tf}.gkyl")
 
         x_vals, elc_dens = utils.func_data_yave(elc_data, 0, z_idx)
         x_vals, ion_dens = utils.func_data_yave(ion_data, 0, z_idx)
@@ -57,6 +65,11 @@ def main():
 
         _ , qpara_ion = utils.func_data_yave(ion_qpara_data, 0, -1)
         _, qpara_elc = utils.func_data_yave(elc_qpara_data, 0, -1)
+        _ , qperp_ion = utils.func_data_yave(ion_qperp_data, 0, -1)
+        _, qperp_elc = utils.func_data_yave(elc_qperp_data, 0, -1)
+
+        Qion = mi/2 * (qpara_ion) # + qperp_ion)
+        Qelc = me/2 * (qpara_elc) # + qperp_elc)
 
         diagnostics['elcDens'].append(elc_dens)
         diagnostics['ionDens'].append(ion_dens)
@@ -67,7 +80,7 @@ def main():
         diagnostics['VEshear'].append(VE_shear)
         diagnostics['Er'].append(Er)
         diagnostics['p'].append((elc_temp + ion_temp) * elc_dens)
-        diagnostics['Qpara'].append(qpara_elc + qpara_ion)
+        diagnostics['Qpara'].append(Qelc + Qion)
 
         # Transpose the following data to make it easier to do turbulence statistics
         VEx2dTot.append(VE_x.T)
@@ -76,11 +89,13 @@ def main():
         _, _, elc_dens2d = utils.func_data_2d(elc_data, 0, z_idx)
         elcDens2dTot.append(elc_dens2d.T)
 
-        _, _, elc_temp2d = utils.func_data_2d(elc_data, 2, z_idx)
-        elcTemp2dTot.append(elc_temp2d.T * me / eV)
+        _, _, elc_temp2dpar = utils.func_data_2d(elc_data, 2, z_idx)
+        _, _, elc_temp2dperp = utils.func_data_2d(elc_data, 2, z_idx)
+        elcTemp2dTot.append((elc_temp2dpar.T + 2*elc_temp2dperp) * me / eV)
 
-        _, _, ion_temp2d = utils.func_data_2d(ion_data, 2, z_idx)
-        ionTemp2dTot.append(ion_temp2d.T * mi / eV)
+        _, _, ion_temp2dpar = utils.func_data_2d(ion_data, 2, z_idx)
+        _, _, ion_temp2dperp = utils.func_data_2d(ion_data, 2, z_idx)
+        ionTemp2dTot.append((ion_temp2dpar.T + 2*ion_temp2dperp) * mi / eV)
 
         _, _, phi2d = utils.func_data_2d(phi_data, 0, z_idx)
         phi2dTot.append(phi2d.T)
@@ -118,9 +133,30 @@ def main():
     reynolds_stress = np.mean(dVEx * dVEy, axis=(0, 1))
     reynolds_force = -np.gradient(reynolds_stress, x_vals)
 
-    dn, dn_norm = utils.func_calc_norm_fluc(elcDens2dTot, elcDensAve, elcDensAve, Nt, Ny, Nx)
-    dT, dT_norm = utils.func_calc_norm_fluc(elcTemp2dTot, elcTempAve, elcTempAve, Nt, Ny, Nx)
-    dphi, dphi_norm = utils.func_calc_norm_fluc(phi2dTot, phiAve, elcTempAve, Nt, Ny, Nx)
+    n_flat = elcDens2dTot.transpose(0, 2, 1).reshape(-1, Nx)
+    T_flat = elcTemp2dTot.transpose(0, 2, 1).reshape(-1, Nx)
+    phi_flat = phi2dTot.transpose(0, 2, 1).reshape(-1, Nx)
+
+    # Time-Averaged Profiles (Mean)
+    n_mean = np.mean(n_flat, axis=0)
+    T_mean = np.mean(T_flat, axis=0)
+    phi_mean = np.mean(phi_flat, axis=0)
+
+    # RMS Fluctuations (Std Dev). To normalize, uncomment "/ Mean "
+    # dn or dn/n
+    dn_rms = np.std(n_flat, axis=0) #/ np.abs(n_mean)
+    # dT or dT/T
+    dT_rms = np.std(T_flat, axis=0) #/ np.abs(T_mean)
+    # dPhi or e*dPhi/Te (Normalized by Te)
+    dphi_rms = np.std(phi_flat, axis=0) #/ np.abs(T_mean)
+
+    dn_norm = dn_rms / elcDensAve
+    dT_norm = dT_rms / elcTempAve
+    dphi_norm = dphi_rms / elcTempAve
+
+    dn, _ = utils.func_calc_norm_fluc(elcDens2dTot, elcDensAve, elcDensAve, Nt, Ny, Nx)
+    dT, _ = utils.func_calc_norm_fluc(elcTemp2dTot, elcTempAve, elcTempAve, Nt, Ny, Nx)
+    dphi, _ = utils.func_calc_norm_fluc(phi2dTot, phiAve, elcTempAve, Nt, Ny, Nx)
 
     dnSq = dn * dn
     skew, kurt = [], []
@@ -159,6 +195,7 @@ def main():
     all_results = {**averaged, "Gx": Gx, "Qxe": Qxe, "Qxi": Qxi, 
                    "reynolds_stress": reynolds_stress, "reynolds_force": reynolds_force,
                    "dn_norm": dn_norm, "dT_norm": dT_norm, "dphi_norm": dphi_norm,
+                   "dn": dn_rms, "dT": dT_rms, "dphi": dphi_rms,
                    "skew": skew, "kurt": kurt, "l_rad": l_rad, "l_rad_err": l_rad_err,
                    "xVals_new": xVals_new}
 

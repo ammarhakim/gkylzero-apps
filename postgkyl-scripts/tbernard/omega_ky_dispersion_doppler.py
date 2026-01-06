@@ -122,6 +122,7 @@ def calculate_background_parameters(file_prefix, fstart, fend, x_idx, z_idx, x_v
     params['LTi'] = -local_vals['Ti'] / local_grads['Ti']
     params['eta_e'], params['eta_i'] = params['Ln'] / params['LTe'], params['Ln'] / params['LTi']
     params['Te0_eV'], params['Ti0_eV'] = local_vals['Te'] / ELEM_CHARGE * me, local_vals['Ti'] / ELEM_CHARGE * mi
+    params['R'] = x_vals[x_idx] + 2.17 - 0.10
     for key, val in params.items(): print(f"  {key:<8} = {val:.3f}")
     return params
 
@@ -298,6 +299,12 @@ def plot_dispersion(power_spectrum, omega_axis, ky_axis, rho, metadata, theory_p
         tau = theory_params['Ti0_eV'] / theory_params['Te0_eV']
         omega_itg = -tau * omega_star_e * (1 + theory_params['eta_i'])
         ax.plot(ky_rhos_pos, omega_itg, color='magenta', linestyle=':', linewidth=2.5, label='ITG')
+
+        # 3. Interchange / Curvature Frequency (Curvature Drift: 2*cs/R)
+        # omega_IC approx ky * rho_s * 2 * c_s / R
+        if 'R' in theory_params:
+            omega_ic = -ky_rhos_pos * (2.0 * c_s / theory_params['R'])
+            ax.plot(ky_rhos_pos, omega_ic, color='cyan', linestyle='-.', linewidth=2.5, label='Interchange')
     
     cbar = fig.colorbar(im, ax=ax)
     cbar.set_label(r'log$_{10}$ |$F(\omega, k_y)$|$^2$')

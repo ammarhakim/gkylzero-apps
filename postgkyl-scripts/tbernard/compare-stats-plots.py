@@ -24,7 +24,7 @@ def load_hdf5_field(filepath, field):
         data = f[field][:]
         return x_vals[:], data[:]
 
-def plot_moments(files, labels, fields, lcfs_shift, output, slice_from=0, show=False):
+def plot_moments(files, labels, fields, lcfs_shift, output, slice_from=0, show=False, colors=None):
     n_fields = len(fields)
     n_cols = 3
     n_rows = math.ceil(n_fields / n_cols)
@@ -34,12 +34,13 @@ def plot_moments(files, labels, fields, lcfs_shift, output, slice_from=0, show=F
 
     for i, field in enumerate(fields):
         ax = axs[i]
-        for f, label in zip(files, labels):
+        for idx, (f, label) in enumerate(zip(files, labels)):
             x, y = load_hdf5_field(f, field)
             x = x - lcfs_shift
             x = x[slice_from:]
             y = y[slice_from:]
-            ax.plot(x, y, label=label, linewidth=2)
+            color = colors[idx] if colors and idx < len(colors) else None
+            ax.plot(x, y, label=label, linewidth=2, color=color)
         ax.axvline(x=0, color='gray', linestyle='--')
         ax.axhline(y=0, color='gray', linestyle='-')
         ax.set_title(label_map.get(field, field))
@@ -65,6 +66,7 @@ def main():
     parser.add_argument("--lcfs", type=float, default=0.10, help="LCFS radial shift")
     parser.add_argument("--slice_from", type=int, default=0, help="Index to slice x and y arrays from")
     parser.add_argument("--show", action="store_true", help="Display the plot interactively")
+    parser.add_argument("--colors", nargs='+', help="Colors for each file (e.g. red blue green)", default=None)
     args = parser.parse_args()
 
     if not args.files or not args.labels or not args.fields:
@@ -73,7 +75,7 @@ def main():
     if len(args.files) != len(args.labels):
         raise ValueError("Each file must have a corresponding label")
 
-    plot_moments(args.files, args.labels, args.fields, args.lcfs, args.output, args.slice_from, args.show)
+    plot_moments(args.files, args.labels, args.fields, args.lcfs, args.output, args.slice_from, args.show, args.colors)
 
 if __name__ == "__main__":
     main()

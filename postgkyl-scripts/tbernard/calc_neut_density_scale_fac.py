@@ -41,14 +41,15 @@ def main():
     # Calculate integral of ionization source term over entire volume
     # S_e,iz = n_neut * react_rate
     # Interpolate 3d data
-    x, y, z, m0_neut = utils.func_data_3d(f"{file_prefix}-{neut}_LTEMoments_0.gkyl", 0) # neutrals are static
+    x, y, z, m0_neut = utils.func_data_3d(f"{file_prefix}-{neut}_{frame}.gkyl", 0) # neutrals are static
     _, _, _, m0_elc = utils.func_data_3d(f"{file_prefix}-elc_BiMaxwellianMoments_{frame}.gkyl", 0)
-    _, _, _, react_rate = utils.func_data_3d(f"{file_prefix}-ion_elc_{neut}_iz_react_{frame}.gkyl", 0)
+    _, _, _, react_rate = utils.func_data_3d(f"{file_prefix}-ion_elc_react_iz_{neut}_{frame}.gkyl", 0)
     _, _, _, jac = utils.func_data_3d(f"{file_prefix}-jacobgeo.gkyl", 0)
     dx = x[1] - x[0]
     dy = y[1] - y[0]
     dz = z[1] - z[0]
     dV = dx * dy * dz  # Volume element
+    m0_neut = m0_neut/(mp*2.014)
 
     # Multiply by Jacobian to get volume element
     source_iz = jac * m0_neut * m0_elc * react_rate
