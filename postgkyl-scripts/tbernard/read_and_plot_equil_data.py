@@ -33,6 +33,51 @@ plt.rcParams.update({
 
 # ========================= HELPER FUNCTIONS ================================
 
+def get_r_lcfs(gfile_data):
+    """
+    Calculates R_LCFS at the Outer Midplane (height of magnetic axis).
+    
+    Args:
+        gfile_data (dict): Dictionary containing 'rbdry', 'zbdry', and 'zmaxis'.
+        
+    Returns:
+        float: R coordinate of the LCFS at the outer midplane.
+    """
+    R_b = gfile_data['rbdry']
+    Z_b = gfile_data['zbdry']
+    Z_axis = gfile_data['zmaxis'] # Use 0.0 if you strictly want geometric midplane
+    
+    # We want to find R where Z_b crosses Z_axis.
+    # Since the boundary is a loop, we iterate through segments.
+    
+    intersections = []
+    
+    n_points = len(R_b)
+    for i in range(n_points):
+        # Get points for current segment (wrapping around at the end)
+        z1 = Z_b[i]
+        z2 = Z_b[(i + 1) % n_points]
+        r1 = R_b[i]
+        r2 = R_b[(i + 1) % n_points]
+        
+        # Check if the segment crosses Z_axis
+        if (z1 - Z_axis) * (z2 - Z_axis) <= 0:
+            # Avoid division by zero if horizontal segment (unlikely)
+            if z1 == z2:
+                intersections.append(r1)
+                continue
+            
+            # Linear interpolation to find R at Z_axis
+            slope = (r2 - r1) / (z2 - z1)
+            r_cross = r1 + slope * (Z_axis - z1)
+            intersections.append(r_cross)
+    
+    if not intersections:
+        raise ValueError("Could not find intersection with midplane.")
+        
+    # The Outer Midplane is the Maximum R intersection
+    return max(intersections)
+
 def calculate_miller_parameters(gfile_data):
     """Calculates key geometric parameters (a, kappa, delta) from g-file LCFS."""
     rbdry, zbdry = gfile_data["rbdry"], gfile_data["zbdry"]
@@ -62,7 +107,7 @@ def generate_miller_lcfs(miller_params, shafranov_param, a_override=None):
 
 # ========================= CORE ANALYSIS SCRIPT ============================
 
-def analyze_and_plot(gfile_path, plot_miller, shafranov_param, save_plots, output_dir, figure_format):
+def analyze_and_plot(gfile_path, plot_miller, shafranov_param, save_plots, output_dir, figure_format, x_in, x_out):
     """
     Main function to perform all analysis and plotting.
     """
@@ -97,6 +142,28 @@ def analyze_and_plot(gfile_path, plot_miller, shafranov_param, save_plots, outpu
     ax1.plot(gfile_data["rbdry"], gfile_data["zbdry"], 'w-', linewidth=2.0, label='Experimental LCFS')
     ax1.plot(gfile_data["rmagx"], gfile_data["zmagx"], 'wx', markersize=10, mew=2.5, label='Magnetic Axis')
 
+    # print magnetic axis location
+    print(f"Magnetic Axis Location: R = {gfile_data['rmagx']:.4f} m, Z = {gfile_data['zmagx']:.4f} m")
+
+    formatted_r_coords = ", ".join(map(str, gfile_data['rlim']))
+    print(f"\nVessel Wall R Coordinates: {formatted_r_coords}")
+    formatted_z_coords = ", ".join(map(str, gfile_data['zlim']))
+    print(f"Vessel Wall Z Coordinates: {formatted_z_coords}")
+
+    # Assuming 'g' is your loaded gfile object/dictionary
+    r_axis = gfile_data['rmaxis']      # R position of magnetic axis [m]
+    f_axis = gfile_data['fpol'][0]     # F = RB_phi at the axis [T*m]
+
+    B_axis = gfile_data['bcentr'] #f_axis / r_axis  # B field on axis [T]
+
+    print(f"B on axis: {B_axis:.4f} T")
+
+    # Assuming you have loaded your gfile into a dict called 'g'
+    # (using OMFIT, freegs, or a custom parser)
+
+    r_lcfs = get_r_lcfs(gfile_data)
+    print(f"R_LCFS (Outer Midplane): {r_lcfs:.4f} m")   
+
     if plot_miller:
         print("\n--- Miller Geometry Analysis ---")
         miller_params = calculate_miller_parameters(gfile_data)
@@ -105,10 +172,10 @@ def analyze_and_plot(gfile_path, plot_miller, shafranov_param, save_plots, outpu
         R_miller, Z_miller = generate_miller_lcfs(miller_params, shafranov_param)
         ax1.plot(R_miller, Z_miller, 'r--', linewidth=2.5, label=f'Miller LCFS')
         # 10cm inside (a - 0.10)
-        R_miller_inner, Z_miller_inner = generate_miller_lcfs(miller_params, shafranov_param, a_override=miller_params['a'] - 0.10)
+        R_miller_inner, Z_miller_inner = generate_miller_lcfs(miller_params, shafranov_param, a_override=miller_params['a'] - x_in)
         ax1.plot(R_miller_inner, Z_miller_inner, color='C1', linestyle=':', linewidth=3, label='inner/outer boundary')
         # 5cm outside (a + 0.05)
-        R_miller_outer, Z_miller_outer = generate_miller_lcfs(miller_params, shafranov_param, a_override=miller_params['a'] + 0.05)
+        R_miller_outer, Z_miller_outer = generate_miller_lcfs(miller_params, shafranov_param, a_override=miller_params['a'] + x_out)
         ax1.plot(R_miller_outer, Z_miller_outer, color='C1', linestyle=':', linewidth=3)
 
     gfile_basename = os.path.basename(gfile_path)
@@ -134,17 +201,30 @@ def analyze_and_plot(gfile_path, plot_miller, shafranov_param, save_plots, outpu
     psi_outboard_midplane = psi_RZ[r_axis_idx:, z_axis_idx]
     R_outboard_midplane = R_grid[r_axis_idx:]
 
-    R_of_psi_interpolator = CubicSpline(psi_outboard_midplane, R_outboard_midplane, extrapolate=False)
+    # 1. Sort the arrays so psi is strictly increasing
+    sort_indices = np.argsort(psi_outboard_midplane)
+    psi_sorted = psi_outboard_midplane[sort_indices]
+    R_sorted   = R_outboard_midplane[sort_indices]
+
+    # 2. Create the interpolator with sorted data
+    R_of_psi_interpolator = CubicSpline(psi_sorted, R_sorted, extrapolate=False)
     psi_normalized = np.linspace(0, 1, len(q_profile))
+    # Ensure your target psi_values are also within the sorted range
     psi_values = gfile_data["simagx"] + psi_normalized * (gfile_data["sibdry"] - gfile_data["simagx"])
+
     R_for_q_profile = R_of_psi_interpolator(psi_values)
+    coeffs_q = np.polyfit(R_for_q_profile[~np.isnan(R_for_q_profile)], q_profile[~np.isnan(R_for_q_profile)], 3)
+    print(f"Fitted q-profile coefficients (highest degree first): {coeffs_q}")
 
     fig2, ax2 = plt.subplots(figsize=(8, 6))
     valid_indices = ~np.isnan(R_for_q_profile)
-    ax2.plot(R_for_q_profile[valid_indices], q_profile[valid_indices], 'b-')
+    ax2.plot(R_for_q_profile[valid_indices], q_profile[valid_indices], 'b-', label='G-file q Profile')
+    ax2.plot(R_for_q_profile[valid_indices], np.polyval(coeffs_q, R_for_q_profile[valid_indices]), 'r--', label='3rd Order Poly Fit')
+    ax2.axvline(r_lcfs, color='k', linestyle='--', label='LCFS')
     ax2.set_title(f"Safety Factor (q) Profile: {gfile_basename}")
     ax2.set_xlabel('Major Radius R (m)')
     ax2.set_ylabel('Safety Factor q')
+    ax2.legend()
     ax2.grid(True, linestyle='--')
     plt.tight_layout()
 
@@ -153,7 +233,6 @@ def analyze_and_plot(gfile_path, plot_miller, shafranov_param, save_plots, outpu
         plt.savefig(output_filename)
         print(f"Saved q-profile plot to {output_filename}")
     plt.show()
-
 
 def extract_limiter_segments(r_vessel, z_vessel):
     """
@@ -261,6 +340,20 @@ if __name__ == "__main__":
         help="Format for the saved figures (e.g., .png, .pdf, .svg).\nDefault: .png"
     )
 
+    parser.add_argument(
+        "--x-in",
+        type=float,
+        default=0.10,
+        help="Distance (in meters) to offset the inner Miller boundary from LCFS.\nDefault: 0.10 m"
+    )
+
+    parser.add_argument(
+        "--x-out",
+        type=float,
+        default=0.05,
+        help="Distance (in meters) to offset the outer Miller boundary from LCFS.\nDefault: 0.05 m"
+    )
+
     # --- Parse Arguments and Run ---
     args = parser.parse_args()
     
@@ -271,7 +364,11 @@ if __name__ == "__main__":
         shafranov_param=args.shafranov,
         save_plots=args.save_plots,
         output_dir=args.outdir,
-        figure_format=args.format
+        figure_format=args.format,
+        x_in=args.x_in,
+        x_out=args.x_out
     )
+
+    
     
     print("\nAnalysis complete.")

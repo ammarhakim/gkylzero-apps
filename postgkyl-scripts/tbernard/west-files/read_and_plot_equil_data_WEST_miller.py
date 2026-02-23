@@ -20,10 +20,6 @@ import sys
 import argparse  # Import the argument parsing library
 import os        # Import for path manipulation
 
-import postgkyl as pg
-from matplotlib.collections import LineCollection
-import utils
-
 # --- Plotting Style (can be left as a global setting) ---
 plt.rcParams.update({
     "font.size": 14,
@@ -36,25 +32,6 @@ plt.rcParams.update({
 })
 
 # ========================= HELPER FUNCTIONS ================================
-
-def read_z_vals_from_csv(csv_path):
-    """
-    Reads Z values from a CSV file and returns them as a numpy array.
-    The CSV file is expected to have a column named 'z'.
-    """
-    import pandas as pd
-    try:
-        df = pd.read_csv(csv_path)
-        if 'z' not in df.columns:
-            raise ValueError("CSV file must contain a column named 'z'.")
-        z_values = df['z'].values
-        return z_values
-    except FileNotFoundError:
-        print(f"Error: The file '{csv_path}' was not found.", file=sys.stderr)
-        sys.exit(1)
-    except Exception as e:
-        print(f"An error occurred while reading the CSV file: {e}", file=sys.stderr)
-        sys.exit(1)
 
 def divertor_plate_func_in(s):
     """
@@ -81,23 +58,6 @@ def divertor_plate_func_out(s):
     R = (1-s)*RZ_lo[0] + s*RZ_up[0]
     Z = (1-s)*RZ_lo[1] + s*RZ_up[1]
     return R, Z
-
-def window_plate_upper(s):
-    s = np.asarray(s)
-    RZ_lo = np.array([2.324, 0.75])
-    RZ_up = np.array([2.765, 0.75])
-    R = (1-s)*RZ_lo[0] + s*RZ_up[0]
-    Z = (1-s)*RZ_lo[1] + s*RZ_up[1]
-    return R, Z
-
-def window_plate_lower(s):
-    s = np.asarray(s)
-    RZ_lo = np.array([2.8578, 0.4615])
-    RZ_up = np.array([2.97, 0.482])
-    R = (1-s)*RZ_lo[0] + s*RZ_up[0]
-    Z = (1-s)*RZ_lo[1] + s*RZ_up[1]
-    return R, Z
-
 
 def calculate_miller_parameters(gfile_data):
     """Calculates key geometric parameters (a, kappa, delta) from g-file LCFS."""
@@ -159,10 +119,10 @@ def analyze_and_plot(gfile_path, plot_miller, shafranov_param, save_plots, outpu
 
     # --- 2. Plot the 2D Equilibrium ---
     print("Generating equilibrium plot...")
-    fig1, ax1 = plt.subplots(figsize=(6,8))
+    fig1, ax1 = plt.subplots(figsize=(8, 10))
     #levels = np.linspace(psi_RZ.min(), psi_RZ.max(), 20)
-    vmin= 0.36 #0.406
-    vmax= 0.39 #
+    vmin=0.41 #0.406
+    vmax=0.416 #
     levels = np.linspace(vmin, vmax, 20)
     contour = ax1.contour(RR, ZZ, psi_RZ, levels=levels)##psi_RZ.min(), vmax=psi_RZ.max()*.75)
     fig1.colorbar(contour, ax=ax1, label=r'$\psi$ (Wb/rad)')
@@ -174,8 +134,8 @@ def analyze_and_plot(gfile_path, plot_miller, shafranov_param, save_plots, outpu
 
     # Plot vessel wall, separatrix, and magnetic axis
     ax1.plot(gfile_data["rlim"], gfile_data["zlim"], 'k-', linewidth=2.0, label='Vessel Wall')
-    #ax1.plot(gfile_data["rbdry"], gfile_data["zbdry"], 'r-', linewidth=2.0, label='Separatrix')
-    #ax1.plot(gfile_data["rmagx"], gfile_data["zmagx"], 'rx', markersize=10, mew=2.5, label='Magnetic Axis')
+    ax1.plot(gfile_data["rbdry"], gfile_data["zbdry"], 'r-', linewidth=2.0, label='Separatrix')
+    ax1.plot(gfile_data["rmagx"], gfile_data["zmagx"], 'rx', markersize=10, mew=2.5, label='Magnetic Axis')
 
     if limiter_segments:
         print("\nExtracting limiter segments...")
@@ -205,41 +165,16 @@ def analyze_and_plot(gfile_path, plot_miller, shafranov_param, save_plots, outpu
         # 5cm outside (a + 0.05)
         R_miller_outer, Z_miller_outer = generate_miller_lcfs(miller_params, shafranov_param, a_override=miller_params['a'] + 0.05)
         ax1.plot(R_miller_outer, Z_miller_outer, color='C1', linestyle=':', linewidth=3)
-
-    # Load nodes data.
-    prefix = utils.find_prefix('-nodes.gkyl', '.')
-    data = pg.GData(prefix+"-nodes.gkyl")
-    node_vals = data.get_values()
-    R = node_vals[:,0,:,0]
-    Z = node_vals[:,0,:,1]
-    phi = node_vals[:,0,:,2]
-    ax1.plot(R,Z,marker=".", color="w", linestyle="none")
-    ax1.scatter(R,Z, marker=".")
-    segs1 = np.stack((R,Z), axis=2)
-    segs2 = segs1.transpose(1,0,2)
-    plt.gca().add_collection(LineCollection(segs1,colors='white',linewidth=1,label='Gkyl Grid'))
-    plt.gca().add_collection(LineCollection(segs2,colors='white',linewidth=1))
-    plt.grid()
     
-    #ax1.plot(Rout, Zout, color='cyan', linewidth=3, label='Outboard Divertor Plate')
-    #ax1.plot(Rin, Zin, color='blue', linewidth=3, label='Inboard Divertor Plate')
-    ax1.plot(*window_plate_upper(svals), color='magenta', linewidth=2, label='Upper Window Plate')
-    ax1.plot(*window_plate_lower(svals), color='blue', linewidth=2, label='Lower Window Plate')
-
-    # plot rcp probe location
-    csv_path = "/Users/BernardT/Documents/WEST-PMI/62104_rcp.csv" # Update this path to your actual CSV file
-    r = 2.562
-    z_vals = read_z_vals_from_csv(csv_path)
-    r_vals = r * np.ones_like(z_vals)
-    ax1.plot(r_vals, z_vals, color='orange', linewidth=3, label='RCP Probe Location')
+    ax1.plot(Rout, Zout, color='cyan', linewidth=3, label='Outboard Divertor Plate')
+    ax1.plot(Rin, Zin, color='blue', linewidth=3, label='Inboard Divertor Plate')
 
     gfile_basename = os.path.basename(gfile_path)
     ax1.set_title(f"Magnetic Equilibrium: {gfile_basename}")
     ax1.set_xlabel('R (m)')
     ax1.set_ylabel('Z (m)')
     ax1.set_aspect('equal')
-    leg = ax1.legend()
-    leg.get_frame().set_facecolor('gray')
+    ax1.legend()
     plt.tight_layout()
 
     if save_plots:
