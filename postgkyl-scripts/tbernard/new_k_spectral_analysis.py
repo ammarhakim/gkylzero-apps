@@ -78,14 +78,14 @@ def compute_fsa_cross_spectra(data1_yz, data2_yz, J_z, weighting=None):
     F1 = np.fft.fft(f1, axis=0)
     F2 = np.fft.fft(f2, axis=0)
     cross = np.conj(F1) * F2
-    
-    if weighting is not None:
-        cross = cross * weighting[np.newaxis, :]
+
+    # if weighting is not None:
+    #     cross = cross * weighting[np.newaxis, :]
         
-    if J_z is not None:
-        return np.sum(cross * J_z[np.newaxis, :], axis=1) / np.sum(J_z)
-    else:
-        return np.mean(cross, axis=1)
+    # if J_z is not None:
+    #     return np.sum(cross * J_z[np.newaxis, :], axis=1) / np.sum(J_z)
+    # else:
+    #     return np.mean(cross, axis=1)
 
 def fsa_mean(data_yz, J_z):
     """Calculates Flux Surface Average of the background profile."""
@@ -250,10 +250,14 @@ def analyze_simulation(args):
     final_data['Qi_tot']  = final_data['Qi_conv'] + final_data['Qi_cond']
 
     # Phases
-    final_data['alpha_n_phi'] = np.angle(np.mean(acc['cross_n_phi'], axis=0))
-    final_data['alpha_Ti_phi'] = np.angle(np.mean(acc['cross_Ti_phi'], axis=0))
-    final_data['alpha_Tperp_phi'] = np.angle(np.mean(acc['cross_Tperp_phi'], axis=0))
-    final_data['alpha_Tpar_phi'] = np.angle(np.mean(acc['cross_Tpar_phi'], axis=0))
+    # final_data['alpha_n_phi'] = np.angle(np.mean(acc['cross_n_phi'], axis=0))
+    # final_data['alpha_Ti_phi'] = np.angle(np.mean(acc['cross_Ti_phi'], axis=0))
+    # final_data['alpha_Tperp_phi'] = np.angle(np.mean(acc['cross_Tperp_phi'], axis=0))
+    # final_data['alpha_Tpar_phi'] = np.angle(np.mean(acc['cross_Tpar_phi'], axis=0))
+    final_data['alpha_n_phi'] = np.mean(acc['cross_n_phi'], axis=0)
+    final_data['alpha_Ti_phi'] = np.mean(acc['cross_Ti_phi'], axis=0)
+    final_data['alpha_Tperp_phi'] = np.mean(acc['cross_Tperp_phi'], axis=0)
+    final_data['alpha_Tpar_phi'] = np.mean(acc['cross_Tpar_phi'], axis=0)
 
     # Save
     with h5py.File(args.output, 'w') as f:
@@ -392,7 +396,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     # --- INPUT PROMPT LOGIC ---
-    if args.analyze and '--analyze' in sys.argv:
+    if args.analyze:
         try:
             print("\n--- Geometry Setup ---")
             device = input("Enter device (e.g., TCV, DIII-D, WEST) [Hit Enter for default]: ").strip().upper()

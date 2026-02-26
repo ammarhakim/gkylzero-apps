@@ -34,7 +34,12 @@ def interpolate_field(field3d, comp):
     return interp.interpolate(comp)
 
 def get_slice_index(z_vals, z_idx):
-    return 0 if z_idx == 0 else len(z_vals) // 2
+    if z_idx == 0:
+        return 0
+    elif z_idx == -1: 
+        return len(z_vals)-1
+    else:
+        return len(z_vals) // 2
 
 def func_data_yave(field3d, comp, z_idx):
     grid, values = interpolate_field(field3d, comp)
@@ -129,6 +134,59 @@ def func_calc_norm_fluc(data2d, dataAve, dataNorm, Nt, Ny, Nx):
     #delt = np.mean(delt, axis=0)
     delt_norm = sigma / dataNorm
     return delt, delt_norm
+
+def func_calc_local_shear(gij_data):
+    """
+    Calculates the local magnetic shear from the contravariant metric tensor (g^ij).
+    Assumes standard Gkeyll symmetric tensor ordering: 
+    0:xx, 1:xy, 2:xz, 3:yy, 4:yz, 5:zz
+    """
+    # Extract g^xx (comp 0) and g^xy (comp 1)
+    grid, gxx = interpolate_field(gij_data, 0)
+    _, gxy = interpolate_field(gij_data, 1)
+    
+    CCC = get_center_coords(grid)
+    x_vals, y_vals, z_vals = CCC
+    dz = z_vals[1] - z_vals[0]
+    
+    # Drop the basis expansion dimension (last axis)
+    gxx = gxx[:, :, :, 0]
+    gxy = gxy[:, :, :, 0]
+    
+    # Calculate the integrated shear factor (alpha = g^xy / g^xx)
+    alpha = gxy / gxx
+    
+    # Local shear is the parallel derivative of alpha
+    local_shear = np.gradient(alpha, dz, axis=2)
+    
+    # Average over the y (binormal) direction as geometry is axisymmetric
+    local_shear_xz = np.mean(local_shear, axis=1)
+    
+    return x_vals, z_vals, local_shear_xz
+
+def func_calc_trapped_fraction(bmag_data):
+    """
+    Calculates the local geometric trapped particle fraction.
+    f_t = sqrt(1 - B(z)/B_max)
+    """
+    grid, bmag = interpolate_field(bmag_data, 0)
+    CCC = get_center_coords(grid)
+    x_vals, y_vals, z_vals = CCC
+    
+    # Drop the basis expansion dimension (last axis)
+    bmag = bmag[:, :, :, 0]
+    
+    # Find the maximum B along the field line (axis=2 is z) and y (axis=1)
+    B_max = np.max(bmag, axis=(1, 2), keepdims=True)
+    
+    # Calculate local trapped fraction
+    # np.maximum(0, ...) prevents runtime warnings from floating point rounding errors
+    f_trap_3d = np.sqrt(np.maximum(0.0, 1.0 - bmag / B_max))
+    
+    # Average over the y (binormal) direction as geometry is axisymmetric
+    f_trap_xz = np.mean(f_trap_3d, axis=1)
+    
+    return x_vals, z_vals, f_trap_xz
 
 def save_to_hdf5(filename, x_vals, diagnostics, metadata):
     with h5py.File(filename, "w") as f:
